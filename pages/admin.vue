@@ -85,7 +85,7 @@ import { ref, reactive } from 'vue'
 const supabase = useSupabaseClient()
 
 // 請確保這裡的網址對應到你正在執行的 FastAPI 伺服器
-const API_BASE_URL = 'https://meowtube-api.onrender.com/'
+const API_BASE_URL = 'https://meowtube-api.onrender.com'
 
 const file = ref(null)
 const isUploading = ref(false)
