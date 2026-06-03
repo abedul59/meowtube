@@ -25,7 +25,7 @@
           class="absolute top-0 left-0 w-full h-full outline-none"
           controlsList="nodownload"
         >
-          <source :src="`http://127.0.0.1:8000/stream/${movie.tg_message_id}`" type="video/mp4" />
+          <source :src="`https://meowtube-api.onrender.com/stream/${movie.tg_message_id}`" type="video/mp4" />
           你的瀏覽器不支援 HTML5 影片播放。
         </video>
       </div>
@@ -35,8 +35,8 @@
         <p class="text-gray-400 leading-relaxed whitespace-pre-wrap">{{ movie.description || '這部電影還沒有寫簡介喔。' }}</p>
         
         <div class="mt-6 pt-6 border-t border-gray-700 flex flex-wrap gap-4">
-           <a :href="`http://127.0.0.1:8000/download/${movie.tg_message_id}`" target="_blank" class="px-4 py-2 bg-gray-700 hover:bg-gray-600 text-white rounded transition-colors text-sm flex items-center">
-             💾 備用下載連結
+           <a :href="`https://meowtube-api.onrender.com/stream/${movie.tg_message_id}`" target="_blank" class="px-4 py-2 bg-gray-700 hover:bg-gray-600 text-white rounded transition-colors text-sm flex items-center">
+             🔗 另開視窗觀看 / 下載
            </a>
         </div>
       </div>
