@@ -1,4 +1,5 @@
 export default defineNuxtConfig({
+  srcDir: 'app/', // 告訴 Nuxt 把 app/ 當作原始碼根目錄
   modules: [
     '@nuxtjs/tailwindcss',
     '@nuxtjs/supabase'
