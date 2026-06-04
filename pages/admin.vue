@@ -51,6 +51,11 @@
           <label class="block text-sm font-medium text-gray-300 mb-2">海報圖片網址 (選填)</label>
           <input type="url" v-model="movieForm.coverUrl" class="form-input" />
         </div>
+        <!-- 💡 補回的 Topic ID 欄位 -->
+        <div>
+          <label class="block text-sm font-medium text-gray-300 mb-2">Telegram Topic ID (若無可留空)</label>
+          <input type="number" v-model="movieForm.topicId" placeholder="例如：123" class="form-input" />
+        </div>
 
         <button type="submit" :disabled="isUploading" class="submit-btn bg-red-600 hover:bg-red-700">
           <span v-if="isUploading" class="spinner"></span>
@@ -115,6 +120,12 @@
           <input type="text" v-model="episodeForm.title" placeholder="例: 大結局" class="form-input" />
         </div>
 
+        <!-- 💡 補回的 Topic ID 欄位 -->
+        <div>
+          <label class="block text-sm font-medium text-gray-300 mb-2">Telegram Topic ID (若無可留空)</label>
+          <input type="number" v-model="episodeForm.topicId" placeholder="例如：123" class="form-input" />
+        </div>
+
         <div>
           <label class="block text-sm font-medium text-gray-300 mb-2">選擇影片檔 (MP4)</label>
           <input type="file" @change="e => file = e.target.files[0]" accept="video/*" required class="file-input" />
@@ -142,10 +153,10 @@ const isUploading = ref(false)
 const uploadStatus = ref('')
 const seriesList = ref([]) // 儲存資料庫中已建立的影集清單
 
-// 表單資料綁定
-const movieForm = reactive({ title: '', description: '', coverUrl: '' })
+// 表單資料綁定 (補上 topicId)
+const movieForm = reactive({ title: '', description: '', coverUrl: '', topicId: '' })
 const seriesForm = reactive({ title: '', description: '', coverUrl: '' })
-const episodeForm = reactive({ seriesId: '', season: 1, episode: 1, title: '' })
+const episodeForm = reactive({ seriesId: '', season: 1, episode: 1, title: '', topicId: '' })
 
 // 載入影集清單 (提供給下拉選單使用)
 const fetchSeries = async () => {
@@ -157,12 +168,17 @@ onMounted(() => {
   fetchSeries()
 })
 
-// 通用上傳檔案至 Hugging Face 函數
-const uploadToHF = async (captionText) => {
+// 通用上傳檔案至 Hugging Face 函數 (新增接收 topicId)
+const uploadToHF = async (captionText, topicId) => {
   uploadStatus.value = '正在上傳至 Hugging Face (轉發至 TG)...'
   const formData = new FormData()
   formData.append('file', file.value)
   formData.append('caption', captionText)
+  
+  // 💡 如果使用者有填寫 Topic ID，就打包進去傳給 API
+  if (topicId) {
+    formData.append('topic_id', parseInt(topicId))
+  }
 
   const uploadRes = await fetch(`${API_BASE_URL}/upload/`, { method: 'POST', body: formData })
   if (!uploadRes.ok) throw new Error('伺服器回應錯誤')
@@ -177,19 +193,22 @@ const handleUploadMovie = async () => {
   if (!file.value) return alert('請先選擇影片檔案！')
   try {
     isUploading.value = true
-    const messageId = await uploadToHF(`🎬 ${movieForm.title}\n${movieForm.description}`)
+    const messageId = await uploadToHF(`🎬 ${movieForm.title}\n${movieForm.description}`, movieForm.topicId)
 
     uploadStatus.value = '檔案已上傳！正在寫入資料庫...'
     const { error } = await supabase.from('movies').insert({
       title: movieForm.title,
       description: movieForm.description,
       cover_url: movieForm.coverUrl,
+      // 如果你的 movies 資料表裡有 topic_id 欄位，這行也能幫你存進去
+      topic_id: movieForm.topicId ? parseInt(movieForm.topicId) : null,
       tg_message_id: messageId
     })
     if (error) throw error
 
     alert('✅ 電影上傳並發布成功！')
-    movieForm.title = ''; movieForm.description = ''; movieForm.coverUrl = ''; file.value = null
+    // 清空表單
+    movieForm.title = ''; movieForm.description = ''; movieForm.coverUrl = ''; movieForm.topicId = ''; file.value = null
     document.querySelector('input[type="file"]').value = ''
   } catch (error) { alert(`❌ 發生錯誤：\n${error.message}`) } 
   finally { isUploading.value = false }
@@ -224,7 +243,8 @@ const handleUploadEpisode = async () => {
     const selectedSeries = seriesList.value.find(s => s.id === episodeForm.seriesId)
     const captionText = `📺 ${selectedSeries.title} - S${episodeForm.season}E${episodeForm.episode} ${episodeForm.title}`
     
-    const messageId = await uploadToHF(captionText)
+    // 傳入 caption 與 topicId
+    const messageId = await uploadToHF(captionText, episodeForm.topicId)
 
     uploadStatus.value = '檔案已上傳！正在寫入資料庫...'
     const { error } = await supabase.from('episodes').insert({
@@ -237,7 +257,9 @@ const handleUploadEpisode = async () => {
     if (error) throw error
 
     alert('✅ 影集單集上傳成功！')
-    episodeForm.episode++ // 自動將集數 +1，方便連續上傳下一集
+    
+    // 💡 聰明的防呆設計：集數自動 +1，但「保留」 Topic ID 和季數，方便你連傳下一集！
+    episodeForm.episode++ 
     episodeForm.title = ''; file.value = null
     document.querySelector('input[type="file"]').value = ''
   } catch (error) { alert(`❌ 發生錯誤：\n${error.message}`) } 
