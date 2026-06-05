@@ -129,53 +129,144 @@ const activeTab = ref('movie')
 const file = ref(null)
 const isUploading = ref(false)
 const uploadStatus = ref('')
-const seriesList = ref([])
+const seriesList = ref([]) // 儲存資料庫中已建立的影集清單
 
-// 原本的表單狀態
+// ==========================================
+// 表單資料綁定
+// ==========================================
 const movieForm = reactive({ title: '', description: '', coverUrl: '', topicId: '' })
 const seriesForm = reactive({ title: '', description: '', coverUrl: '' })
 const episodeForm = reactive({ seriesId: '', season: 1, episode: 1, title: '', topicId: '' })
 
-// 🌟 新增：批次上傳表單與狀態
+// 批次上傳表單與狀態
 const batchForm = reactive({ seriesId: '', season: 1, startEpisode: 1, topicId: '' })
 const batchFiles = ref([])
 const batchStatus = ref({ isUploading: false, currentIndex: 0, total: 0, success: 0, fail: 0, log: '' })
 
-onMounted(async () => {
+// ==========================================
+// 載入初始資料
+// ==========================================
+const fetchSeries = async () => {
   const { data } = await supabase.from('series').select('id, title').order('created_at', { ascending: false })
   if (data) seriesList.value = data
+}
+
+onMounted(() => {
+  fetchSeries()
 })
 
-// 原本的單一上傳邏輯...
+// ==========================================
+// 共用：上傳檔案至 Hugging Face 函數
+// ==========================================
 const uploadToHF = async (captionText, topicId, fileToUpload = file.value) => {
+  uploadStatus.value = '正在上傳至 Hugging Face (轉發至 TG)...'
   const formData = new FormData()
   formData.append('file', fileToUpload)
   formData.append('caption', captionText)
-  if (topicId) formData.append('topic_id', parseInt(topicId))
+  
+  if (topicId) {
+    formData.append('topic_id', parseInt(topicId))
+  }
 
   const uploadRes = await fetch(`${API_BASE_URL}/upload/`, { method: 'POST', body: formData })
   if (!uploadRes.ok) throw new Error('伺服器回應錯誤')
   const uploadData = await uploadRes.json()
   if (!uploadData.success) throw new Error(`上傳失敗: ${uploadData.detail}`)
+  
   return uploadData.message_id
 }
 
-const handleUploadMovie = async () => { /* 略，見原程式碼 (已完整包含在最上面的 template 中，邏輯不變，此處為了節省版面精簡，但實作時請保留原本的函數內容) */ }
-const handleCreateSeries = async () => { /* 略 */ }
-const handleUploadEpisode = async () => { /* 略 */ }
+// ==========================================
+// 🎬 處理：上傳單部電影
+// ==========================================
+const handleUploadMovie = async () => {
+  if (!file.value) return alert('請先選擇影片檔案！')
+  try {
+    isUploading.value = true
+    const messageId = await uploadToHF(`🎬 ${movieForm.title}\n${movieForm.description}`, movieForm.topicId)
+
+    uploadStatus.value = '檔案已上傳！正在寫入資料庫...'
+    const { error } = await supabase.from('movies').insert({
+      title: movieForm.title,
+      description: movieForm.description,
+      cover_url: movieForm.coverUrl,
+      topic_id: movieForm.topicId ? parseInt(movieForm.topicId) : null,
+      tg_message_id: messageId
+    })
+    if (error) throw error
+
+    alert('✅ 電影上傳並發布成功！')
+    movieForm.title = ''; movieForm.description = ''; movieForm.coverUrl = ''; movieForm.topicId = ''; file.value = null
+    document.querySelector('input[type="file"]').value = ''
+  } catch (error) { alert(`❌ 發生錯誤：\n${error.message}`) } 
+  finally { isUploading.value = false }
+}
 
 // ==========================================
-// 🌟 全新邏輯：處理批次檔案選取與排序
+// 🆕 處理：建立新影集 (免上傳影片)
+// ==========================================
+const handleCreateSeries = async () => {
+  try {
+    isUploading.value = true
+    const { error } = await supabase.from('series').insert({
+      title: seriesForm.title,
+      description: seriesForm.description,
+      cover_url: seriesForm.coverUrl
+    })
+    if (error) throw error
+
+    alert('✨ 影集建立成功！請切換到「上傳影集單集」來上傳影片。')
+    seriesForm.title = ''; seriesForm.description = ''; seriesForm.coverUrl = ''
+    await fetchSeries() // 更新下拉選單
+    activeTab.value = 'episode' // 自動切換到上傳單集頁籤
+  } catch (error) { alert(`❌ 發生錯誤：\n${error.message}`) } 
+  finally { isUploading.value = false }
+}
+
+// ==========================================
+// 📺 處理：上傳影集單集
+// ==========================================
+const handleUploadEpisode = async () => {
+  if (!file.value) return alert('請先選擇影片檔案！')
+  if (!episodeForm.seriesId) return alert('請選擇要上傳的影集！')
+
+  try {
+    isUploading.value = true
+    const selectedSeries = seriesList.value.find(s => s.id === episodeForm.seriesId)
+    const captionText = `📺 ${selectedSeries.title} - S${episodeForm.season}E${episodeForm.episode} ${episodeForm.title}`
+    
+    const messageId = await uploadToHF(captionText, episodeForm.topicId)
+
+    uploadStatus.value = '檔案已上傳！正在寫入資料庫...'
+    const { error } = await supabase.from('episodes').insert({
+      series_id: episodeForm.seriesId,
+      season: episodeForm.season,
+      episode: episodeForm.episode,
+      title: episodeForm.title,
+      tg_message_id: messageId
+    })
+    if (error) throw error
+
+    alert('✅ 影集單集上傳成功！')
+    
+    episodeForm.episode++ 
+    episodeForm.title = ''; file.value = null
+    document.querySelector('input[type="file"]').value = ''
+  } catch (error) { alert(`❌ 發生錯誤：\n${error.message}`) } 
+  finally { isUploading.value = false }
+}
+
+// ==========================================
+// 📚 處理：批次檔案選取與排序
 // ==========================================
 const onBatchFileChange = (e) => {
-  // 將 FileList 轉為陣列，並使用自然排序 (確保 第2集 不會排在 第10集 後面)
   const filesArray = Array.from(e.target.files)
   filesArray.sort((a, b) => a.name.localeCompare(b.name, undefined, { numeric: true }))
   batchFiles.value = filesArray
 }
 
 // ==========================================
-// 🌟 全新邏輯：執行序列化批次上傳
+// 📚 處理：執行序列化批次上傳
 // ==========================================
 const handleBatchUpload = async () => {
   if (batchFiles.value.length === 0) return alert('請選擇至少一個影片檔案！')
@@ -183,7 +274,6 @@ const handleBatchUpload = async () => {
 
   const selectedSeries = seriesList.value.find(s => s.id === batchForm.seriesId)
   
-  // 初始化狀態
   batchStatus.value = { 
     isUploading: true, 
     currentIndex: 0, 
@@ -195,25 +285,22 @@ const handleBatchUpload = async () => {
 
   let currentEpNum = parseInt(batchForm.startEpisode)
 
-  // 核心：使用 for...of 與 await 確保檔案「一個傳完才傳下一個」
   for (let i = 0; i < batchFiles.value.length; i++) {
     const currentFile = batchFiles.value[i]
     batchStatus.value.currentIndex = i + 1
     batchStatus.value.log += `\n⏳ [${i+1}/${batchStatus.value.total}] 正在上傳 EP ${currentEpNum}: ${currentFile.name}...`
 
     try {
-      // 1. 呼叫我們封裝好的 Hugging Face 上傳函數
       const captionText = `📺 ${selectedSeries.title} - S${batchForm.season}E${currentEpNum}`
       const messageId = await uploadToHF(captionText, batchForm.topicId, currentFile)
 
       batchStatus.value.log += `\n📦 檔案已上傳至雲端，寫入資料庫...`
 
-      // 2. 寫入 Supabase
       const { error } = await supabase.from('episodes').insert({
         series_id: batchForm.seriesId,
         season: batchForm.season,
         episode: currentEpNum,
-        title: currentFile.name, // 批次上傳時，直接將檔名作為該集的備註標題
+        title: currentFile.name, 
         tg_message_id: messageId
       })
       
@@ -226,18 +313,18 @@ const handleBatchUpload = async () => {
       batchStatus.value.log += ` ❌ 失敗: ${err.message}`
     }
 
-    currentEpNum++ // 自動將下一集的號碼 + 1
+    currentEpNum++ 
   }
 
-  // 結束處理
   batchStatus.value.isUploading = false
   batchStatus.value.log += `\n\n🎉 批次任務結束！共計成功: ${batchStatus.value.success} 集, 失敗: ${batchStatus.value.fail} 集。`
   
   if (batchStatus.value.fail === 0) {
-    // 若全數成功，自動清空選擇的檔案，準備下一批
     batchFiles.value = []
-    document.querySelector('.file-input').value = ''
-    batchForm.startEpisode = currentEpNum // 將起始集數設為下一集，方便直接選下一批檔案
+    // 確保抓取到批次上傳的 input file 元素並清空
+    const batchInput = document.querySelector('input[multiple]')
+    if (batchInput) batchInput.value = ''
+    batchForm.startEpisode = currentEpNum 
   }
 }
 </script>
