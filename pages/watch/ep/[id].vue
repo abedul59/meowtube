@@ -1,12 +1,14 @@
 <template>
   <div class="max-w-4xl mx-auto py-8 px-4">
     
-    <NuxtLink v-if="episode" :to="`/series/${episode.series_id}`" class="inline-flex items-center text-gray-400 hover:text-white mb-6 transition-colors font-bold">
-      ⬅ 返回選集頁面
-    </NuxtLink>
-    <NuxtLink v-else to="/" class="inline-flex items-center text-gray-400 hover:text-white mb-6 transition-colors font-bold">
-      ⬅ 返回劇院大廳
-    </NuxtLink>
+    <div class="flex items-center gap-4 mb-6">
+      <button @click="$router.back()" class="inline-flex items-center text-gray-400 hover:text-white transition-colors font-bold bg-gray-800 px-4 py-2 rounded-lg shadow">
+        ⬅ 返回上一頁
+      </button>
+      <NuxtLink v-if="episode" :to="`/series/${episode.series_id}`" class="inline-flex items-center text-gray-500 hover:text-gray-300 transition-colors text-sm">
+        📺 回選集頁面
+      </NuxtLink>
+    </div>
 
     <div v-if="pending" class="flex justify-center items-center h-64 text-gray-400">
       <p class="text-xl animate-pulse">🎬 載入集數資訊中...</p>
@@ -25,7 +27,15 @@
       </div>
       
       <div class="relative pt-[56.25%] bg-black rounded-xl overflow-hidden shadow-2xl border border-gray-800">
-        <video controls autoplay class="absolute top-0 left-0 w-full h-full outline-none" controlsList="nodownload">
+        <video 
+          ref="videoPlayer"
+          controls 
+          autoplay 
+          class="absolute top-0 left-0 w-full h-full outline-none" 
+          controlsList="nodownload"
+          @timeupdate="saveProgress"
+          @loadedmetadata="resumeProgress"
+        >
           <source :src="`https://lawxstudents168-meowtube-api.hf.space/stream/${episode.tg_message_id}`" type="video/mp4" />
         </video>
       </div>
@@ -36,10 +46,6 @@
             <h2 class="text-xl font-semibold text-gray-200">正在觀看：{{ episode.series.title }}</h2>
             <p class="text-gray-400 mt-1">S{{ episode.season }}E{{ episode.episode }}</p>
           </div>
-          
-           <a :href="`https://lawxstudents168-meowtube-api.hf.space/stream/${episode.tg_message_id}`" target="_blank" class="px-5 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg font-bold transition-colors text-sm flex items-center shadow-md">
-             📥 另開視窗觀看 / 下載檔案
-           </a>
         </div>
       </div>
     </div>
@@ -47,21 +53,38 @@
 </template>
 
 <script setup>
-import { useRoute } from 'vue-router'
+import { ref } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
+
 const route = useRoute()
+const router = useRouter()
 const supabase = useSupabaseClient()
 
-// 根據網址列的 ID 向 Supabase 撈取單集資料，並順便把 series (影集資訊) 關聯拉出來
-const { data: episode, pending, error } = await useAsyncData(`ep-${route.params.id}`, async () => {
-  const { data, error } = await supabase
-    .from('episodes')
-    .select('*, series(*)') // 關聯查詢魔法：把 series 表的資料一併帶出
-    .eq('id', route.params.id)
-    .single()
+// 取得 video 標籤的參考
+const videoPlayer = ref(null)
+// 建立這集影集專屬的記憶 Key
+const storageKey = `meowtube_progress_ep_${route.params.id}`
 
+const { data: episode, pending, error } = await useAsyncData(`ep-${route.params.id}`, async () => {
+  const { data, error } = await supabase.from('episodes').select('*, series(*)').eq('id', route.params.id).single()
   if (error) throw error
   return data
 })
+
+// 💡 記憶功能：影片播放時，每秒將當前時間存入 localStorage
+const saveProgress = () => {
+  if (videoPlayer.value && videoPlayer.value.currentTime > 0) {
+    localStorage.setItem(storageKey, videoPlayer.value.currentTime)
+  }
+}
+
+// 💡 記憶功能：影片載入完成後，讀取記憶並跳轉
+const resumeProgress = () => {
+  const savedTime = localStorage.getItem(storageKey)
+  if (savedTime && videoPlayer.value) {
+    videoPlayer.value.currentTime = parseFloat(savedTime)
+  }
+}
 </script>
 
 <style scoped>
