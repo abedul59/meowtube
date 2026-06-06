@@ -1,5 +1,8 @@
 <template>
   <div class="max-w-4xl mx-auto py-8 px-4">
+    <button @click="$router.back()" class="mb-6 inline-flex items-center text-gray-300 hover:text-white transition-colors font-bold bg-gray-800 px-4 py-2 rounded-lg shadow border border-gray-700">
+      ⬅ 返回上一頁
+    </button>
     <h1 class="text-3xl font-bold mb-8 text-white">⚙️ 劇院管理後台</h1>
 
     <div class="flex flex-wrap gap-2 mb-6">
