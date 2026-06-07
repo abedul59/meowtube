@@ -26,7 +26,7 @@
           autoplay 
           class="absolute top-0 left-0 w-full h-full outline-none" 
           controlsList="nodownload"
-          @loadedmetadata="resumeProgress"
+          @canplay="resumeProgress"
           @pause="syncProgressToDB"
         >
           <source :src="`https://lawxstudents168-meowtube-api.hf.space/stream/${movie.tg_message_id}`" type="video/mp4" />
@@ -55,6 +55,7 @@ const supabase = useSupabaseClient()
 
 const videoPlayer = ref(null)
 const isSyncing = ref(false)
+const hasResumed = ref(false) // 確保只跳轉一次，避免無限循環
 let syncInterval = null
 
 // 同時抓取「電影資訊」與「雲端播放進度」
@@ -62,8 +63,8 @@ const { data: movie, pending, error } = await useAsyncData(`movie-${route.params
   const { data: movieData, error: movieError } = await supabase.from('movies').select('*').eq('id', route.params.id).single()
   if (movieError) throw movieError
 
-  // 嘗試抓取雲端進度
-  const { data: progressData } = await supabase.from('playback_progress').select('current_time').eq('video_id', route.params.id).single()
+  // 💡 關鍵修復：改用 maybeSingle()，這樣第一次看沒紀錄時才不會報錯當機！
+  const { data: progressData } = await supabase.from('playback_progress').select('current_time').eq('video_id', route.params.id).maybeSingle()
 
   return {
     ...movieData,
@@ -71,49 +72,45 @@ const { data: movie, pending, error } = await useAsyncData(`movie-${route.params
   }
 })
 
-// 💡 同步進度到 Supabase (雲端)
+// 同步進度到 Supabase (雲端)
 const syncProgressToDB = async () => {
-  if (!videoPlayer.value || videoPlayer.value.currentTime <= 1) return
+  if (!videoPlayer.value || videoPlayer.value.currentTime <= 2) return
 
   isSyncing.value = true
-  await supabase.from('playback_progress').upsert({
-    video_id: route.params.id,
-    current_time: videoPlayer.value.currentTime,
-    updated_at: new Date()
-  }, { onConflict: 'video_id' })
-  
-  setTimeout(() => { isSyncing.value = false }, 1000) // 顯示同步提示 1 秒鐘
-}
+  try {
+    const { error } = await supabase.from('playback_progress').upsert({
+      video_id: route.params.id,
+      current_time: videoPlayer.value.currentTime,
+      updated_at: new Date().toISOString()
+    }, { onConflict: 'video_id' })
 
-// 影片載入完成後，自動跳轉到雲端記憶的時間
-const resumeProgress = () => {
-  if (videoPlayer.value && movie.value?.savedTime > 0) {
-    videoPlayer.value.currentTime = movie.value.savedTime
+    // 若有錯誤，會在瀏覽器開發者工具印出，方便除錯
+    if (error) console.error("雲端同步被拒絕:", error.message)
+  } catch (err) {
+    console.error("同步發生異常:", err)
+  } finally {
+    setTimeout(() => { isSyncing.value = false }, 1000)
   }
 }
 
-// 掛載生命週期：設定自動備份與離開網頁備份
-onMounted(() => {
-  // 每 10 秒自動備份一次進度到雲端
-  syncInterval = setInterval(() => {
-    if (videoPlayer.value && !videoPlayer.value.paused) {
-      syncProgressToDB()
-    }
-  }, 10000)
+// 影片準備好播放時，跳轉到雲端記憶的時間
+const resumeProgress = () => {
+  if (!hasResumed.value && videoPlayer.value && movie.value?.savedTime > 2) {
+    videoPlayer.value.currentTime = movie.value.savedTime
+    hasResumed.value = true // 標記已跳轉
+  }
+}
 
-  // 關閉視窗或重新整理前，最後同步一次
+onMounted(() => {
+  syncInterval = setInterval(() => {
+    if (videoPlayer.value && !videoPlayer.value.paused) syncProgressToDB()
+  }, 10000)
   window.addEventListener('beforeunload', syncProgressToDB)
 })
 
-// 離開此頁面前，清除計時器並強制同步
 onBeforeUnmount(() => {
   clearInterval(syncInterval)
   window.removeEventListener('beforeunload', syncProgressToDB)
   syncProgressToDB()
 })
 </script>
-
-<style scoped>
-.animate-fade-in { animation: fadeIn 0.3s ease-out; }
-@keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
-</style>
