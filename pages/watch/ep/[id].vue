@@ -14,7 +14,7 @@
       <p class="text-xl animate-pulse">🎬 載入集數資訊中...</p>
     </div>
     <div v-else-if="error || !episode" class="bg-red-900/20 text-red-500 p-6 rounded-lg text-center border border-red-800">
-      找不到這集影片，可能已經被刪除了。
+      找不到這集影片。
     </div>
     
     <div v-else class="space-y-6 animate-fade-in">
@@ -33,7 +33,7 @@
           autoplay 
           class="absolute top-0 left-0 w-full h-full outline-none" 
           controlsList="nodownload"
-          @loadedmetadata="resumeProgress"
+          @canplay="resumeProgress"
           @pause="syncProgressToDB"
         >
           <source :src="`https://lawxstudents168-meowtube-api.hf.space/stream/${episode.tg_message_id}`" type="video/mp4" />
@@ -41,16 +41,11 @@
       </div>
 
       <div class="bg-gray-800 p-6 rounded-xl border border-gray-700 shadow-lg">
-        <div class="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
-          <div>
-            <div class="flex items-center gap-3">
-              <h2 class="text-xl font-semibold text-gray-200">正在觀看：{{ episode.series.title }}</h2>
-              <span v-if="isSyncing" class="text-xs text-teal-400 flex items-center gap-1">
-                <span class="w-2 h-2 bg-teal-400 rounded-full animate-ping"></span> 雲端同步中...
-              </span>
-            </div>
-            <p class="text-gray-400 mt-1">S{{ episode.season }}E{{ episode.episode }}</p>
-          </div>
+        <div class="flex items-center gap-3">
+          <h2 class="text-xl font-semibold text-gray-200">正在觀看：{{ episode.series.title }}</h2>
+          <span v-if="isSyncing" class="text-xs text-teal-400 flex items-center gap-1">
+            <span class="w-2 h-2 bg-teal-400 rounded-full animate-ping"></span> 雲端同步中...
+          </span>
         </div>
       </div>
     </div>
@@ -66,6 +61,7 @@ const supabase = useSupabaseClient()
 
 const videoPlayer = ref(null)
 const isSyncing = ref(false)
+const hasResumed = ref(false)
 let syncInterval = null
 
 // 同時抓取「單集資訊」與「雲端播放進度」
@@ -73,8 +69,8 @@ const { data: episode, pending, error } = await useAsyncData(`ep-${route.params.
   const { data: epData, error: epError } = await supabase.from('episodes').select('*, series(*)').eq('id', route.params.id).single()
   if (epError) throw epError
 
-  // 嘗試抓取雲端進度
-  const { data: progressData } = await supabase.from('playback_progress').select('current_time').eq('video_id', route.params.id).single()
+  // 💡 關鍵修復：改用 maybeSingle()
+  const { data: progressData } = await supabase.from('playback_progress').select('current_time').eq('video_id', route.params.id).maybeSingle()
 
   return {
     ...epData,
@@ -82,46 +78,44 @@ const { data: episode, pending, error } = await useAsyncData(`ep-${route.params.
   }
 })
 
-// 💡 同步進度到 Supabase (雲端)
+// 同步進度到 Supabase (雲端)
 const syncProgressToDB = async () => {
-  if (!videoPlayer.value || videoPlayer.value.currentTime <= 1) return
+  if (!videoPlayer.value || videoPlayer.value.currentTime <= 2) return
 
   isSyncing.value = true
-  await supabase.from('playback_progress').upsert({
-    video_id: route.params.id,
-    current_time: videoPlayer.value.currentTime,
-    updated_at: new Date()
-  }, { onConflict: 'video_id' })
+  try {
+    const { error } = await supabase.from('playback_progress').upsert({
+      video_id: route.params.id,
+      current_time: videoPlayer.value.currentTime,
+      updated_at: new Date().toISOString()
+    }, { onConflict: 'video_id' })
 
-  setTimeout(() => { isSyncing.value = false }, 1000)
-}
-
-// 影片載入完成後，自動跳轉
-const resumeProgress = () => {
-  if (videoPlayer.value && episode.value?.savedTime > 0) {
-    videoPlayer.value.currentTime = episode.value.savedTime
+    if (error) console.error("雲端同步被拒絕:", error.message)
+  } catch (err) {
+    console.error("同步發生異常:", err)
+  } finally {
+    setTimeout(() => { isSyncing.value = false }, 1000)
   }
 }
 
-// 掛載生命週期
+// 影片準備好播放時，跳轉時間
+const resumeProgress = () => {
+  if (!hasResumed.value && videoPlayer.value && episode.value?.savedTime > 2) {
+    videoPlayer.value.currentTime = episode.value.savedTime
+    hasResumed.value = true
+  }
+}
+
 onMounted(() => {
   syncInterval = setInterval(() => {
-    if (videoPlayer.value && !videoPlayer.value.paused) {
-      syncProgressToDB()
-    }
+    if (videoPlayer.value && !videoPlayer.value.paused) syncProgressToDB()
   }, 10000)
   window.addEventListener('beforeunload', syncProgressToDB)
 })
 
-// 卸載前強制同步
 onBeforeUnmount(() => {
   clearInterval(syncInterval)
   window.removeEventListener('beforeunload', syncProgressToDB)
   syncProgressToDB()
 })
 </script>
-
-<style scoped>
-.animate-fade-in { animation: fadeIn 0.3s ease-out; }
-@keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
-</style>
