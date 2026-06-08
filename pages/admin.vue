@@ -16,7 +16,7 @@
         📺 單集上傳
       </button>
       <button @click="activeTab = 'batch'" :class="activeTab === 'batch' ? 'bg-teal-600 text-white shadow-lg' : 'bg-gray-800 text-gray-400 hover:bg-gray-700'" class="px-5 py-3 rounded-t-xl font-bold transition-colors flex-1 sm:flex-none">
-        📚 批次上傳整季
+        📚 批次上傳
       </button>
     </div>
 
@@ -37,6 +37,12 @@
         <div><label class="block text-sm font-medium text-gray-300 mb-2">影集名稱</label><input type="text" v-model="seriesForm.title" required class="form-input" /></div>
         <div><label class="block text-sm font-medium text-gray-300 mb-2">劇情簡介</label><textarea v-model="seriesForm.description" rows="3" class="form-input"></textarea></div>
         <div><label class="block text-sm font-medium text-gray-300 mb-2">影集海報網址</label><input type="url" v-model="seriesForm.coverUrl" class="form-input" /></div>
+        
+        <div class="flex items-center gap-3 bg-gray-900 p-4 rounded-lg border border-gray-700 mt-4">
+          <input type="checkbox" id="isAudio" v-model="seriesForm.isAudio" class="w-5 h-5 text-indigo-600 bg-gray-800 border-gray-600 rounded focus:ring-indigo-500">
+          <label for="isAudio" class="text-sm font-bold text-indigo-300 cursor-pointer">🎧 這是一套純聲音的「有聲書 / 廣播劇」</label>
+        </div>
+
         <button type="submit" :disabled="isUploading" class="submit-btn bg-indigo-600 hover:bg-indigo-700"><span v-if="isUploading" class="spinner"></span>{{ isUploading ? '建立中...' : '✨ 建立新影集' }}</button>
       </form>
 
@@ -49,7 +55,7 @@
         </div>
         <div><label class="block text-sm font-medium text-gray-300 mb-2">單集名稱 (選填)</label><input type="text" v-model="episodeForm.title" class="form-input" /></div>
         <div><label class="block text-sm font-medium text-gray-300 mb-2">Telegram Topic ID (若無可留空)</label><input type="number" v-model="episodeForm.topicId" class="form-input" /></div>
-        <div><label class="block text-sm font-medium text-gray-300 mb-2">選擇影片檔</label><input type="file" @change="e => file = e.target.files[0]" accept="video/*" required class="file-input" /></div>
+        <div><label class="block text-sm font-medium text-gray-300 mb-2">選擇檔案 (影片或 MP3)</label><input type="file" @change="e => file = e.target.files[0]" accept="video/*,audio/*" required class="file-input" /></div>
         <button type="submit" :disabled="isUploading || seriesList.length === 0" class="submit-btn bg-indigo-600 hover:bg-indigo-700"><span v-if="isUploading" class="spinner"></span>{{ isUploading ? uploadStatus : '🚀 確認上傳集數' }}</button>
       </form>
 
@@ -85,8 +91,8 @@
         </div>
 
         <div>
-          <label class="block text-sm font-medium text-gray-300 mb-2">選擇該季的所有影片 (可多選)</label>
-          <input type="file" @change="onBatchFileChange" accept="video/*" multiple required class="file-input bg-gray-800 border border-gray-600" />
+          <label class="block text-sm font-medium text-gray-300 mb-2">選擇該季的所有檔案 (支援影片與 MP3，可多選)</label>
+          <input type="file" @change="onBatchFileChange" accept="video/*,audio/*" multiple required class="file-input bg-gray-800 border border-gray-600" />
         </div>
 
         <div v-if="batchFiles.length > 0 && !batchStatus.isUploading" class="bg-gray-900 rounded-lg p-4 border border-gray-700 max-h-48 overflow-y-auto">
@@ -132,23 +138,19 @@ const activeTab = ref('movie')
 const file = ref(null)
 const isUploading = ref(false)
 const uploadStatus = ref('')
-const seriesList = ref([]) // 儲存資料庫中已建立的影集清單
+const seriesList = ref([])
 
 // ==========================================
 // 表單資料綁定
 // ==========================================
 const movieForm = reactive({ title: '', description: '', coverUrl: '', topicId: '' })
-const seriesForm = reactive({ title: '', description: '', coverUrl: '' })
+const seriesForm = reactive({ title: '', description: '', coverUrl: '', isAudio: false }) // 💡 加入 isAudio
 const episodeForm = reactive({ seriesId: '', season: 1, episode: 1, title: '', topicId: '' })
-
-// 批次上傳表單與狀態
 const batchForm = reactive({ seriesId: '', season: 1, startEpisode: 1, topicId: '' })
 const batchFiles = ref([])
 const batchStatus = ref({ isUploading: false, currentIndex: 0, total: 0, success: 0, fail: 0, log: '' })
 
-// ==========================================
-// 載入初始資料
-// ==========================================
+// 載入影集清單
 const fetchSeries = async () => {
   const { data } = await supabase.from('series').select('id, title').order('created_at', { ascending: false })
   if (data) seriesList.value = data
@@ -183,7 +185,7 @@ const uploadToHF = async (captionText, topicId, fileToUpload = file.value) => {
 // 🎬 處理：上傳單部電影
 // ==========================================
 const handleUploadMovie = async () => {
-  if (!file.value) return alert('請先選擇影片檔案！')
+  if (!file.value) return alert('請先選擇檔案！')
   try {
     isUploading.value = true
     const messageId = await uploadToHF(`🎬 ${movieForm.title}\n${movieForm.description}`, movieForm.topicId)
@@ -200,13 +202,13 @@ const handleUploadMovie = async () => {
 
     alert('✅ 電影上傳並發布成功！')
     movieForm.title = ''; movieForm.description = ''; movieForm.coverUrl = ''; movieForm.topicId = ''; file.value = null
-    document.querySelector('input[type="file"]').value = ''
+    document.querySelector('.file-input').value = ''
   } catch (error) { alert(`❌ 發生錯誤：\n${error.message}`) } 
   finally { isUploading.value = false }
 }
 
 // ==========================================
-// 🆕 處理：建立新影集 (免上傳影片)
+// 🆕 處理：建立新影集
 // ==========================================
 const handleCreateSeries = async () => {
   try {
@@ -214,14 +216,15 @@ const handleCreateSeries = async () => {
     const { error } = await supabase.from('series').insert({
       title: seriesForm.title,
       description: seriesForm.description,
-      cover_url: seriesForm.coverUrl
+      cover_url: seriesForm.coverUrl,
+      is_audio: seriesForm.isAudio // 💡 寫入是否為有聲書
     })
     if (error) throw error
 
-    alert('✨ 影集建立成功！請切換到「上傳影集單集」來上傳影片。')
-    seriesForm.title = ''; seriesForm.description = ''; seriesForm.coverUrl = ''
-    await fetchSeries() // 更新下拉選單
-    activeTab.value = 'episode' // 自動切換到上傳單集頁籤
+    alert('✨ 影集建立成功！請切換到「上傳影集單集」來上傳檔案。')
+    seriesForm.title = ''; seriesForm.description = ''; seriesForm.coverUrl = ''; seriesForm.isAudio = false
+    await fetchSeries()
+    activeTab.value = 'episode'
   } catch (error) { alert(`❌ 發生錯誤：\n${error.message}`) } 
   finally { isUploading.value = false }
 }
@@ -230,7 +233,7 @@ const handleCreateSeries = async () => {
 // 📺 處理：上傳影集單集
 // ==========================================
 const handleUploadEpisode = async () => {
-  if (!file.value) return alert('請先選擇影片檔案！')
+  if (!file.value) return alert('請先選擇檔案！')
   if (!episodeForm.seriesId) return alert('請選擇要上傳的影集！')
 
   try {
@@ -251,10 +254,9 @@ const handleUploadEpisode = async () => {
     if (error) throw error
 
     alert('✅ 影集單集上傳成功！')
-    
     episodeForm.episode++ 
     episodeForm.title = ''; file.value = null
-    document.querySelector('input[type="file"]').value = ''
+    document.querySelector('.file-input').value = ''
   } catch (error) { alert(`❌ 發生錯誤：\n${error.message}`) } 
   finally { isUploading.value = false }
 }
@@ -272,7 +274,7 @@ const onBatchFileChange = (e) => {
 // 📚 處理：執行序列化批次上傳
 // ==========================================
 const handleBatchUpload = async () => {
-  if (batchFiles.value.length === 0) return alert('請選擇至少一個影片檔案！')
+  if (batchFiles.value.length === 0) return alert('請選擇至少一個檔案！')
   if (!batchForm.seriesId) return alert('請選擇要上傳的影集！')
 
   const selectedSeries = seriesList.value.find(s => s.id === batchForm.seriesId)
@@ -324,7 +326,6 @@ const handleBatchUpload = async () => {
   
   if (batchStatus.value.fail === 0) {
     batchFiles.value = []
-    // 確保抓取到批次上傳的 input file 元素並清空
     const batchInput = document.querySelector('input[multiple]')
     if (batchInput) batchInput.value = ''
     batchForm.startEpisode = currentEpNum 
