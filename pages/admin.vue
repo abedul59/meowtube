@@ -144,7 +144,7 @@ const seriesList = ref([])
 // 表單資料綁定
 // ==========================================
 const movieForm = reactive({ title: '', description: '', coverUrl: '', topicId: '' })
-const seriesForm = reactive({ title: '', description: '', coverUrl: '', isAudio: false }) // 💡 加入 isAudio
+const seriesForm = reactive({ title: '', description: '', coverUrl: '', isAudio: false }) // 加入 isAudio
 const episodeForm = reactive({ seriesId: '', season: 1, episode: 1, title: '', topicId: '' })
 const batchForm = reactive({ seriesId: '', season: 1, startEpisode: 1, topicId: '' })
 const batchFiles = ref([])
@@ -161,10 +161,10 @@ onMounted(() => {
 })
 
 // ==========================================
-// 共用：上傳檔案至 Hugging Face 函數
+// 共用：上傳檔案至 Hugging Face 函數 (🚀 最新背景輪詢機制)
 // ==========================================
 const uploadToHF = async (captionText, topicId, fileToUpload = file.value) => {
-  uploadStatus.value = '正在上傳至 Hugging Face (轉發至 TG)...'
+  uploadStatus.value = '正在傳送檔案至雲端主機...'
   const formData = new FormData()
   formData.append('file', fileToUpload)
   formData.append('caption', captionText)
@@ -173,12 +173,37 @@ const uploadToHF = async (captionText, topicId, fileToUpload = file.value) => {
     formData.append('topic_id', parseInt(topicId))
   }
 
+  // 1. 先將檔案快速傳給 Hugging Face 暫存
   const uploadRes = await fetch(`${API_BASE_URL}/upload/`, { method: 'POST', body: formData })
-  if (!uploadRes.ok) throw new Error('伺服器回應錯誤')
+  if (!uploadRes.ok) throw new Error('雲端主機回應錯誤')
   const uploadData = await uploadRes.json()
   if (!uploadData.success) throw new Error(`上傳失敗: ${uploadData.detail}`)
   
-  return uploadData.message_id
+  const taskId = uploadData.task_id
+  uploadStatus.value = '主機接收成功！正在轉發至 Telegram (大檔案需數分鐘，請勿關閉網頁)...'
+
+  // 2. 啟動輪詢：每 3 秒詢問一次背景上傳進度
+  return new Promise((resolve, reject) => {
+    const checkInterval = setInterval(async () => {
+      try {
+        const statusRes = await fetch(`${API_BASE_URL}/upload_status/${taskId}`)
+        if (!statusRes.ok) return // 如果網路稍微抖動，忽略並等下一次詢問
+        
+        const statusData = await statusRes.json()
+
+        if (statusData.status === 'completed') {
+          clearInterval(checkInterval) // 成功，停止輪詢
+          resolve(statusData.message_id) // 把最終的 ID 交還給主程式寫入資料庫
+        } else if (statusData.status === 'failed') {
+          clearInterval(checkInterval) // 失敗，停止輪詢
+          reject(new Error(statusData.error || 'Telegram 轉發失敗'))
+        }
+        // 如果狀態還是 'processing'，就什麼都不做，繼續等下一個 3 秒
+      } catch (e) {
+        // 忽略單次輪詢錯誤，保持連線韌性
+      }
+    }, 3000)
+  })
 }
 
 // ==========================================
@@ -217,7 +242,7 @@ const handleCreateSeries = async () => {
       title: seriesForm.title,
       description: seriesForm.description,
       cover_url: seriesForm.coverUrl,
-      is_audio: seriesForm.isAudio // 💡 寫入是否為有聲書
+      is_audio: seriesForm.isAudio // 寫入是否為有聲書
     })
     if (error) throw error
 
@@ -297,6 +322,8 @@ const handleBatchUpload = async () => {
 
     try {
       const captionText = `📺 ${selectedSeries.title} - S${batchForm.season}E${currentEpNum}`
+      
+      // 這裡等待新的輪詢版 uploadToHF，大檔案也不會斷線
       const messageId = await uploadToHF(captionText, batchForm.topicId, currentFile)
 
       batchStatus.value.log += `\n📦 檔案已上傳至雲端，寫入資料庫...`
