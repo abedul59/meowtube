@@ -48,7 +48,27 @@
 
       <form v-if="activeTab === 'episode'" @submit.prevent="handleUploadEpisode" class="space-y-6 animate-fade-in">
         <h2 class="text-xl font-semibold mb-4 text-indigo-400 border-b border-gray-700 pb-2">上傳影集單集</h2>
-        <div><label class="block text-sm font-medium text-gray-300 mb-2">選擇影集</label><select v-model="episodeForm.seriesId" required class="form-input"><option value="" disabled>請選擇影集...</option><option v-for="s in seriesList" :key="s.id" :value="s.id">{{ s.title }}</option></select></div>
+        
+        <div>
+          <label class="block text-sm font-medium text-gray-300 mb-2">選擇影集</label>
+          <select v-model="episodeForm.seriesId" required class="form-input">
+            <option value="" disabled>請選擇影集...</option>
+            <option v-for="s in seriesList" :key="s.id" :value="s.id">{{ s.title }}</option>
+          </select>
+
+          <div v-if="episodeForm.seriesId" class="mt-3 p-3 bg-gray-900 rounded-lg border border-indigo-800/50 flex flex-col gap-2 animate-fade-in">
+            <div class="flex justify-between items-center">
+              <span class="text-xs text-indigo-400 font-bold">💡 貼入 Go 直傳軟體的「影集 UUID」：</span>
+              <button @click.prevent="copyToClipboard(episodeForm.seriesId)" class="text-xs bg-indigo-700 hover:bg-indigo-600 text-white px-3 py-1.5 rounded transition flex items-center gap-1 shadow">
+                {{ copyStatus || '📋 複製 UUID' }}
+              </button>
+            </div>
+            <code class="text-sm text-gray-300 select-all font-mono bg-black/50 p-2 rounded block break-all text-center border border-gray-800">
+              {{ episodeForm.seriesId }}
+            </code>
+          </div>
+        </div>
+
         <div class="flex gap-4">
           <div class="flex-1"><label class="block text-sm font-medium text-gray-300 mb-2">第幾季？</label><input type="number" v-model="episodeForm.season" required min="1" class="form-input" /></div>
           <div class="flex-1"><label class="block text-sm font-medium text-gray-300 mb-2">第幾集？</label><input type="number" v-model="episodeForm.episode" required min="1" class="form-input" /></div>
@@ -71,29 +91,27 @@
             <option value="" disabled>請選擇要上傳到的影集...</option>
             <option v-for="s in seriesList" :key="s.id" :value="s.id">{{ s.title }}</option>
           </select>
+
+          <div v-if="batchForm.seriesId" class="mt-3 p-3 bg-gray-900 rounded-lg border border-teal-800/50 flex flex-col gap-2 animate-fade-in">
+            <div class="flex justify-between items-center">
+              <span class="text-xs text-teal-400 font-bold">💡 貼入 Go 直傳軟體的「影集 UUID」：</span>
+              <button @click.prevent="copyToClipboard(batchForm.seriesId)" class="text-xs bg-teal-700 hover:bg-teal-600 text-white px-3 py-1.5 rounded transition flex items-center gap-1 shadow">
+                {{ copyStatus || '📋 複製 UUID' }}
+              </button>
+            </div>
+            <code class="text-sm text-gray-300 select-all font-mono bg-black/50 p-2 rounded block break-all text-center border border-gray-800">
+              {{ batchForm.seriesId }}
+            </code>
+          </div>
         </div>
 
         <div class="flex gap-4">
-          <div class="flex-1">
-            <label class="block text-sm font-medium text-gray-300 mb-2">這是第幾季？(Season)</label>
-            <input type="number" v-model="batchForm.season" required min="1" class="form-input focus:border-teal-500" />
-          </div>
-          <div class="flex-1">
-            <label class="block text-sm font-medium text-gray-300 mb-2">起始集數 (Episode)</label>
-            <input type="number" v-model="batchForm.startEpisode" required min="1" class="form-input focus:border-teal-500" />
-            <p class="text-xs text-gray-400 mt-1">例如填入 1，選擇的檔案就會依序被標記為 1, 2, 3...</p>
-          </div>
+          <div class="flex-1"><label class="block text-sm font-medium text-gray-300 mb-2">這是第幾季？(Season)</label><input type="number" v-model="batchForm.season" required min="1" class="form-input focus:border-teal-500" /></div>
+          <div class="flex-1"><label class="block text-sm font-medium text-gray-300 mb-2">起始集數 (Episode)</label><input type="number" v-model="batchForm.startEpisode" required min="1" class="form-input focus:border-teal-500" /><p class="text-xs text-gray-400 mt-1">例如填入 1，選擇的檔案就會依序被標記為 1, 2, 3...</p></div>
         </div>
 
-        <div>
-          <label class="block text-sm font-medium text-gray-300 mb-2">Telegram Topic ID (若無可留空)</label>
-          <input type="number" v-model="batchForm.topicId" class="form-input focus:border-teal-500" />
-        </div>
-
-        <div>
-          <label class="block text-sm font-medium text-gray-300 mb-2">選擇該季的所有檔案 (支援影片與 MP3，可多選)</label>
-          <input type="file" @change="onBatchFileChange" accept="video/*,audio/*" multiple required class="file-input bg-gray-800 border border-gray-600" />
-        </div>
+        <div><label class="block text-sm font-medium text-gray-300 mb-2">Telegram Topic ID (若無可留空)</label><input type="number" v-model="batchForm.topicId" class="form-input focus:border-teal-500" /></div>
+        <div><label class="block text-sm font-medium text-gray-300 mb-2">選擇該季的所有檔案 (支援影片與 MP3，可多選)</label><input type="file" @change="onBatchFileChange" accept="video/*,audio/*" multiple required class="file-input bg-gray-800 border border-gray-600" /></div>
 
         <div v-if="batchFiles.length > 0 && !batchStatus.isUploading" class="bg-gray-900 rounded-lg p-4 border border-gray-700 max-h-48 overflow-y-auto">
           <h3 class="text-sm font-bold text-gray-300 mb-2">即將上傳 {{ batchFiles.length }} 個檔案 (系統已自動排序)：</h3>
@@ -107,14 +125,10 @@
 
         <div v-if="batchStatus.isUploading || batchStatus.log" class="bg-black rounded-lg p-4 border border-gray-700">
           <div class="flex justify-between items-center mb-2">
-            <span class="text-teal-400 font-bold text-sm">
-              {{ batchStatus.isUploading ? `上傳進度: ${batchStatus.currentIndex} / ${batchStatus.total}` : '批次上傳已結束' }}
-            </span>
+            <span class="text-teal-400 font-bold text-sm">{{ batchStatus.isUploading ? `上傳進度: ${batchStatus.currentIndex} / ${batchStatus.total}` : '批次上傳已結束' }}</span>
             <span class="text-gray-400 text-xs">成功: {{ batchStatus.success }} | 失敗: {{ batchStatus.fail }}</span>
           </div>
-          <div class="w-full bg-gray-800 rounded-full h-2 mb-4 overflow-hidden">
-            <div class="bg-teal-500 h-2 rounded-full transition-all duration-300" :style="`width: ${(batchStatus.currentIndex / batchStatus.total) * 100}%`"></div>
-          </div>
+          <div class="w-full bg-gray-800 rounded-full h-2 mb-4 overflow-hidden"><div class="bg-teal-500 h-2 rounded-full transition-all duration-300" :style="`width: ${(batchStatus.currentIndex / batchStatus.total) * 100}%`"></div></div>
           <pre class="text-xs text-green-400 font-mono whitespace-pre-wrap max-h-40 overflow-y-auto">{{ batchStatus.log }}</pre>
         </div>
 
@@ -140,17 +154,18 @@ const isUploading = ref(false)
 const uploadStatus = ref('')
 const seriesList = ref([])
 
-// ==========================================
-// 表單資料綁定
-// ==========================================
+// 💡 複製功能狀態
+const copyStatus = ref('')
+
+// 表單狀態
 const movieForm = reactive({ title: '', description: '', coverUrl: '', topicId: '' })
-const seriesForm = reactive({ title: '', description: '', coverUrl: '', isAudio: false }) // 加入 isAudio
+const seriesForm = reactive({ title: '', description: '', coverUrl: '', isAudio: false })
 const episodeForm = reactive({ seriesId: '', season: 1, episode: 1, title: '', topicId: '' })
 const batchForm = reactive({ seriesId: '', season: 1, startEpisode: 1, topicId: '' })
 const batchFiles = ref([])
 const batchStatus = ref({ isUploading: false, currentIndex: 0, total: 0, success: 0, fail: 0, log: '' })
 
-// 載入影集清單
+// 載入影集
 const fetchSeries = async () => {
   const { data } = await supabase.from('series').select('id, title').order('created_at', { ascending: false })
   if (data) seriesList.value = data
@@ -161,7 +176,21 @@ onMounted(() => {
 })
 
 // ==========================================
-// 共用：上傳檔案至 Hugging Face 函數 (🚀 最新背景輪詢機制)
+// 📋 複製 UUID 到剪貼簿功能
+// ==========================================
+const copyToClipboard = async (textToCopy) => {
+  try {
+    await navigator.clipboard.writeText(textToCopy)
+    copyStatus.value = '✅ 已複製!'
+    // 兩秒後恢復按鈕原本文字
+    setTimeout(() => { copyStatus.value = '' }, 2000)
+  } catch (err) {
+    alert('瀏覽器不支援自動複製，請手動選取文字進行複製。')
+  }
+}
+
+// ==========================================
+// 共用：上傳檔案至 Hugging Face (輪詢機制)
 // ==========================================
 const uploadToHF = async (captionText, topicId, fileToUpload = file.value) => {
   uploadStatus.value = '正在傳送檔案至雲端主機...'
@@ -169,11 +198,8 @@ const uploadToHF = async (captionText, topicId, fileToUpload = file.value) => {
   formData.append('file', fileToUpload)
   formData.append('caption', captionText)
   
-  if (topicId) {
-    formData.append('topic_id', parseInt(topicId))
-  }
+  if (topicId) formData.append('topic_id', parseInt(topicId))
 
-  // 1. 先將檔案快速傳給 Hugging Face 暫存
   const uploadRes = await fetch(`${API_BASE_URL}/upload/`, { method: 'POST', body: formData })
   if (!uploadRes.ok) throw new Error('雲端主機回應錯誤')
   const uploadData = await uploadRes.json()
@@ -182,33 +208,26 @@ const uploadToHF = async (captionText, topicId, fileToUpload = file.value) => {
   const taskId = uploadData.task_id
   uploadStatus.value = '主機接收成功！正在轉發至 Telegram (大檔案需數分鐘，請勿關閉網頁)...'
 
-  // 2. 啟動輪詢：每 3 秒詢問一次背景上傳進度
   return new Promise((resolve, reject) => {
     const checkInterval = setInterval(async () => {
       try {
         const statusRes = await fetch(`${API_BASE_URL}/upload_status/${taskId}`)
-        if (!statusRes.ok) return // 如果網路稍微抖動，忽略並等下一次詢問
+        if (!statusRes.ok) return 
         
         const statusData = await statusRes.json()
-
         if (statusData.status === 'completed') {
-          clearInterval(checkInterval) // 成功，停止輪詢
-          resolve(statusData.message_id) // 把最終的 ID 交還給主程式寫入資料庫
+          clearInterval(checkInterval)
+          resolve(statusData.message_id)
         } else if (statusData.status === 'failed') {
-          clearInterval(checkInterval) // 失敗，停止輪詢
+          clearInterval(checkInterval)
           reject(new Error(statusData.error || 'Telegram 轉發失敗'))
         }
-        // 如果狀態還是 'processing'，就什麼都不做，繼續等下一個 3 秒
-      } catch (e) {
-        // 忽略單次輪詢錯誤，保持連線韌性
-      }
+      } catch (e) { }
     }, 3000)
   })
 }
 
-// ==========================================
-// 🎬 處理：上傳單部電影
-// ==========================================
+// 🎬 上傳電影
 const handleUploadMovie = async () => {
   if (!file.value) return alert('請先選擇檔案！')
   try {
@@ -217,32 +236,23 @@ const handleUploadMovie = async () => {
 
     uploadStatus.value = '檔案已上傳！正在寫入資料庫...'
     const { error } = await supabase.from('movies').insert({
-      title: movieForm.title,
-      description: movieForm.description,
-      cover_url: movieForm.coverUrl,
-      topic_id: movieForm.topicId ? parseInt(movieForm.topicId) : null,
-      tg_message_id: messageId
+      title: movieForm.title, description: movieForm.description, cover_url: movieForm.coverUrl,
+      topic_id: movieForm.topicId ? parseInt(movieForm.topicId) : null, tg_message_id: messageId
     })
     if (error) throw error
 
     alert('✅ 電影上傳並發布成功！')
     movieForm.title = ''; movieForm.description = ''; movieForm.coverUrl = ''; movieForm.topicId = ''; file.value = null
     document.querySelector('.file-input').value = ''
-  } catch (error) { alert(`❌ 發生錯誤：\n${error.message}`) } 
-  finally { isUploading.value = false }
+  } catch (error) { alert(`❌ 發生錯誤：\n${error.message}`) } finally { isUploading.value = false }
 }
 
-// ==========================================
-// 🆕 處理：建立新影集
-// ==========================================
+// 🆕 新建影集
 const handleCreateSeries = async () => {
   try {
     isUploading.value = true
     const { error } = await supabase.from('series').insert({
-      title: seriesForm.title,
-      description: seriesForm.description,
-      cover_url: seriesForm.coverUrl,
-      is_audio: seriesForm.isAudio // 寫入是否為有聲書
+      title: seriesForm.title, description: seriesForm.description, cover_url: seriesForm.coverUrl, is_audio: seriesForm.isAudio
     })
     if (error) throw error
 
@@ -250,13 +260,10 @@ const handleCreateSeries = async () => {
     seriesForm.title = ''; seriesForm.description = ''; seriesForm.coverUrl = ''; seriesForm.isAudio = false
     await fetchSeries()
     activeTab.value = 'episode'
-  } catch (error) { alert(`❌ 發生錯誤：\n${error.message}`) } 
-  finally { isUploading.value = false }
+  } catch (error) { alert(`❌ 發生錯誤：\n${error.message}`) } finally { isUploading.value = false }
 }
 
-// ==========================================
-// 📺 處理：上傳影集單集
-// ==========================================
+// 📺 上傳單集
 const handleUploadEpisode = async () => {
   if (!file.value) return alert('請先選擇檔案！')
   if (!episodeForm.seriesId) return alert('請選擇要上傳的影集！')
@@ -265,16 +272,12 @@ const handleUploadEpisode = async () => {
     isUploading.value = true
     const selectedSeries = seriesList.value.find(s => s.id === episodeForm.seriesId)
     const captionText = `📺 ${selectedSeries.title} - S${episodeForm.season}E${episodeForm.episode} ${episodeForm.title}`
-    
     const messageId = await uploadToHF(captionText, episodeForm.topicId)
 
     uploadStatus.value = '檔案已上傳！正在寫入資料庫...'
     const { error } = await supabase.from('episodes').insert({
-      series_id: episodeForm.seriesId,
-      season: episodeForm.season,
-      episode: episodeForm.episode,
-      title: episodeForm.title,
-      tg_message_id: messageId
+      series_id: episodeForm.seriesId, season: episodeForm.season, episode: episodeForm.episode,
+      title: episodeForm.title, tg_message_id: messageId
     })
     if (error) throw error
 
@@ -282,37 +285,23 @@ const handleUploadEpisode = async () => {
     episodeForm.episode++ 
     episodeForm.title = ''; file.value = null
     document.querySelector('.file-input').value = ''
-  } catch (error) { alert(`❌ 發生錯誤：\n${error.message}`) } 
-  finally { isUploading.value = false }
+  } catch (error) { alert(`❌ 發生錯誤：\n${error.message}`) } finally { isUploading.value = false }
 }
 
-// ==========================================
-// 📚 處理：批次檔案選取與排序
-// ==========================================
+// 📚 批次檔案變更
 const onBatchFileChange = (e) => {
   const filesArray = Array.from(e.target.files)
   filesArray.sort((a, b) => a.name.localeCompare(b.name, undefined, { numeric: true }))
   batchFiles.value = filesArray
 }
 
-// ==========================================
-// 📚 處理：執行序列化批次上傳
-// ==========================================
+// 📚 批次上傳
 const handleBatchUpload = async () => {
   if (batchFiles.value.length === 0) return alert('請選擇至少一個檔案！')
   if (!batchForm.seriesId) return alert('請選擇要上傳的影集！')
 
   const selectedSeries = seriesList.value.find(s => s.id === batchForm.seriesId)
-  
-  batchStatus.value = { 
-    isUploading: true, 
-    currentIndex: 0, 
-    total: batchFiles.value.length, 
-    success: 0, 
-    fail: 0, 
-    log: `🎬 開始排隊上傳 ${selectedSeries.title} 第 ${batchForm.season} 季...\n` 
-  }
-
+  batchStatus.value = { isUploading: true, currentIndex: 0, total: batchFiles.value.length, success: 0, fail: 0, log: `🎬 開始排隊上傳 ${selectedSeries.title} 第 ${batchForm.season} 季...\n` }
   let currentEpNum = parseInt(batchForm.startEpisode)
 
   for (let i = 0; i < batchFiles.value.length; i++) {
@@ -322,35 +311,24 @@ const handleBatchUpload = async () => {
 
     try {
       const captionText = `📺 ${selectedSeries.title} - S${batchForm.season}E${currentEpNum}`
-      
-      // 這裡等待新的輪詢版 uploadToHF，大檔案也不會斷線
       const messageId = await uploadToHF(captionText, batchForm.topicId, currentFile)
-
       batchStatus.value.log += `\n📦 檔案已上傳至雲端，寫入資料庫...`
 
       const { error } = await supabase.from('episodes').insert({
-        series_id: batchForm.seriesId,
-        season: batchForm.season,
-        episode: currentEpNum,
-        title: currentFile.name, 
-        tg_message_id: messageId
+        series_id: batchForm.seriesId, season: batchForm.season, episode: currentEpNum, title: currentFile.name, tg_message_id: messageId
       })
-      
       if (error) throw error
-
       batchStatus.value.success++
       batchStatus.value.log += ` ✅ 成功！`
     } catch (err) {
       batchStatus.value.fail++
       batchStatus.value.log += ` ❌ 失敗: ${err.message}`
     }
-
     currentEpNum++ 
   }
 
   batchStatus.value.isUploading = false
   batchStatus.value.log += `\n\n🎉 批次任務結束！共計成功: ${batchStatus.value.success} 集, 失敗: ${batchStatus.value.fail} 集。`
-  
   if (batchStatus.value.fail === 0) {
     batchFiles.value = []
     const batchInput = document.querySelector('input[multiple]')
