@@ -22,15 +22,37 @@
 
     <div class="bg-gray-800 p-6 md:p-8 rounded-b-xl rounded-tr-xl border border-gray-700 shadow-xl relative overflow-hidden">
       
-      <form v-if="activeTab === 'movie'" @submit.prevent="handleUploadMovie" class="space-y-6 animate-fade-in">
-        <h2 class="text-xl font-semibold mb-4 text-red-500 border-b border-gray-700 pb-2">上傳獨立電影</h2>
-        <div><label class="block text-sm font-medium text-gray-300 mb-2">選擇影片檔 (MP4)</label><input type="file" @change="e => file = e.target.files[0]" accept="video/*" required class="file-input" /></div>
-        <div><label class="block text-sm font-medium text-gray-300 mb-2">電影名稱</label><input type="text" v-model="movieForm.title" required class="form-input" /></div>
-        <div><label class="block text-sm font-medium text-gray-300 mb-2">劇情簡介</label><textarea v-model="movieForm.description" rows="3" class="form-input"></textarea></div>
-        <div><label class="block text-sm font-medium text-gray-300 mb-2">海報圖片網址 (選填)</label><input type="url" v-model="movieForm.coverUrl" class="form-input" /></div>
-        <div><label class="block text-sm font-medium text-gray-300 mb-2">Telegram Topic ID (若無可留空)</label><input type="number" v-model="movieForm.topicId" class="form-input" /></div>
-        <button type="submit" :disabled="isUploading" class="submit-btn bg-red-600 hover:bg-red-700"><span v-if="isUploading" class="spinner"></span>{{ isUploading ? uploadStatus : '🚀 確認上傳並發布電影' }}</button>
-      </form>
+      <div v-if="activeTab === 'movie'" class="animate-fade-in">
+        <form @submit.prevent="handleUploadMovie" class="space-y-6">
+          <h2 class="text-xl font-semibold mb-4 text-red-500 border-b border-gray-700 pb-2">上傳獨立電影</h2>
+          <div><label class="block text-sm font-medium text-gray-300 mb-2">選擇影片檔 (MP4)</label><input type="file" @change="e => file = e.target.files[0]" accept="video/*" required class="file-input" /></div>
+          <div><label class="block text-sm font-medium text-gray-300 mb-2">電影名稱</label><input type="text" v-model="movieForm.title" required class="form-input" /></div>
+          <div><label class="block text-sm font-medium text-gray-300 mb-2">劇情簡介</label><textarea v-model="movieForm.description" rows="3" class="form-input"></textarea></div>
+          <div><label class="block text-sm font-medium text-gray-300 mb-2">海報圖片網址 (選填)</label><input type="url" v-model="movieForm.coverUrl" class="form-input" /></div>
+          <div><label class="block text-sm font-medium text-gray-300 mb-2">Telegram Topic ID (若無可留空)</label><input type="number" v-model="movieForm.topicId" class="form-input" /></div>
+          <button type="submit" :disabled="isUploading" class="submit-btn bg-red-600 hover:bg-red-700"><span v-if="isUploading" class="spinner"></span>{{ isUploading ? uploadStatus : '🚀 確認上傳並發布電影' }}</button>
+        </form>
+
+        <div class="mt-10 pt-8 border-t border-gray-700">
+          <h2 class="text-lg font-semibold mb-4 text-gray-400">🔍 取得已上傳電影的 UUID (用於外掛字幕)</h2>
+          <select v-model="selectedMovieId" class="form-input focus:border-red-500">
+            <option value="" disabled>請選擇你想查詢的電影...</option>
+            <option v-for="m in movieList" :key="m.id" :value="m.id">{{ m.title }}</option>
+          </select>
+
+          <div v-if="selectedMovieId" class="mt-3 p-3 bg-gray-900 rounded-lg border border-red-800/50 flex flex-col gap-2 animate-fade-in">
+            <div class="flex justify-between items-center">
+              <span class="text-xs text-red-400 font-bold">💡 貼入 Python 字幕工具的「影片 UUID」：</span>
+              <button @click.prevent="copyToClipboard(selectedMovieId)" class="text-xs bg-red-700 hover:bg-red-600 text-white px-3 py-1.5 rounded transition flex items-center gap-1 shadow">
+                {{ copyStatus || '📋 複製 UUID' }}
+              </button>
+            </div>
+            <code class="text-sm text-gray-300 select-all font-mono bg-black/50 p-2 rounded block break-all text-center border border-gray-800">
+              {{ selectedMovieId }}
+            </code>
+          </div>
+        </div>
+      </div>
 
       <form v-if="activeTab === 'series'" @submit.prevent="handleCreateSeries" class="space-y-6 animate-fade-in">
         <h2 class="text-xl font-semibold mb-4 text-indigo-400 border-b border-gray-700 pb-2">建立新影集 (免上傳檔案)</h2>
@@ -152,7 +174,11 @@ const activeTab = ref('movie')
 const file = ref(null)
 const isUploading = ref(false)
 const uploadStatus = ref('')
+
+// 影集與電影清單
 const seriesList = ref([])
+const movieList = ref([])
+const selectedMovieId = ref('') // 用於查詢電影 UUID
 
 // 💡 複製功能狀態
 const copyStatus = ref('')
@@ -171,8 +197,15 @@ const fetchSeries = async () => {
   if (data) seriesList.value = data
 }
 
+// 載入已上傳電影
+const fetchMovies = async () => {
+  const { data } = await supabase.from('movies').select('id, title').order('created_at', { ascending: false })
+  if (data) movieList.value = data
+}
+
 onMounted(() => {
   fetchSeries()
+  fetchMovies()
 })
 
 // ==========================================
@@ -244,6 +277,9 @@ const handleUploadMovie = async () => {
     alert('✅ 電影上傳並發布成功！')
     movieForm.title = ''; movieForm.description = ''; movieForm.coverUrl = ''; movieForm.topicId = ''; file.value = null
     document.querySelector('.file-input').value = ''
+    
+    // 上傳成功後，重新抓取電影清單，讓下方的選單即時更新
+    await fetchMovies()
   } catch (error) { alert(`❌ 發生錯誤：\n${error.message}`) } finally { isUploading.value = false }
 }
 
@@ -339,10 +375,10 @@ const handleBatchUpload = async () => {
 </script>
 
 <style scoped>
-.form-input { @apply w-full bg-gray-900 border border-gray-700 rounded-md py-2 px-3 text-white focus:outline-none focus:border-indigo-500 transition-colors; }
+.form-input { @apply w-full bg-gray-900 border border-gray-700 rounded-md py-2 px-3 text-white focus:outline-none focus:border-red-500 transition-colors; }
 .file-input { @apply w-full text-gray-300 file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0 file:text-sm file:font-semibold file:bg-gray-700 file:text-white hover:file:bg-gray-600 focus:outline-none cursor-pointer; }
 .submit-btn { @apply w-full text-white font-bold py-3 px-4 rounded-md transition-colors disabled:bg-gray-600 disabled:cursor-not-allowed flex justify-center items-center gap-2; }
 .spinner { @apply w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin; }
-.animate-fade-in { animation: fadeIn 0.2s ease-out; }
+.animate-fade-in { animation: fadeIn 0.3s ease-out; }
 @keyframes fadeIn { from { opacity: 0; transform: translateY(5px); } to { opacity: 1; transform: translateY(0); } }
 </style>
