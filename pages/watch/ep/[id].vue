@@ -1,16 +1,20 @@
 <template>
   <div class="min-h-screen bg-gray-900 text-white p-4 md:p-8">
     <div class="max-w-7xl mx-auto">
+      <!-- 返回按鈕 -->
       <button @click="$router.back()" class="mb-6 inline-flex items-center text-gray-400 hover:text-white transition font-bold bg-gray-800 px-4 py-2 rounded-lg border border-gray-700 shadow-sm">
         ⬅ 返回上一頁
       </button>
 
+      <!-- 載入中狀態 -->
       <div v-if="loading" class="flex justify-center items-center h-64">
         <div class="w-10 h-10 border-4 border-indigo-500 border-t-transparent rounded-full animate-spin"></div>
       </div>
 
+      <!-- 影片內容區塊 -->
       <div v-else-if="episode" class="grid grid-cols-1 xl:grid-cols-3 gap-8">
         
+        <!-- 左側：影片播放器與主資訊 -->
         <div class="xl:col-span-2 space-y-6">
           <div class="relative pt-[56.25%] bg-black rounded-xl overflow-hidden shadow-2xl border border-gray-800">
             <video 
@@ -37,7 +41,7 @@
             </video>
           </div>
 
-          <!-- 💡 新增：觀看紀錄控制面板 -->
+          <!-- 💡 觀看紀錄控制面板 -->
           <div class="flex flex-wrap items-center gap-3 bg-gray-800/50 p-3 rounded-lg border border-gray-700/50">
             <button @click="manualSaveProgress" class="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-bold rounded shadow transition">
               💾 記憶觀看時間
@@ -70,6 +74,7 @@
           </div>
         </div>
 
+        <!-- 右側：同季選集清單 -->
         <div class="bg-gray-800 rounded-xl border border-gray-700 flex flex-col h-[500px] xl:h-auto max-h-[700px]">
           <div class="p-4 border-b border-gray-700 bg-gray-800/80 rounded-t-xl sticky top-0">
             <h3 class="text-lg font-bold text-white">選集清單 (第 {{ episode.season }} 季)</h3>
@@ -114,25 +119,39 @@ const episode = ref(null)
 const seriesEpisodes = ref([])
 const videoPlayer = ref(null)
 const savedTime = ref(0)
-const actionMessage = ref('') // 用於顯示成功提示訊息
+const actionMessage = ref('')
 
 const fetchEpisodeData = async () => {
   try {
     loading.value = true
     const epId = route.params.id
 
+    // 1. 取得影片與影集資訊
     const { data: epData, error: epError } = await supabase.from('episodes').select('*, series(*)').eq('id', epId).single()
     if (epError) throw epError
     episode.value = epData
 
+    // 2. 取得同季選單
     if (epData.series_id) {
       const { data: listData } = await supabase.from('episodes').select('id, season, episode, title, subtitles').eq('series_id', epData.series_id).eq('season', epData.season).order('episode', { ascending: true })
       if (listData) seriesEpisodes.value = listData
     }
 
-    const progressKey = `progress_ep_${epId}`
-    const localProgress = localStorage.getItem(progressKey)
-    if (localProgress) savedTime.value = parseFloat(localProgress)
+    // 3. 雲端優先讀取進度 (從 playback_progress 表)
+    // 使用 maybeSingle() 避免第一觀看時找不到資料而報錯
+    const { data: progressData } = await supabase
+      .from('playback_progress')
+      .select('current_time')
+      .eq('video_id', epId)
+      .maybeSingle()
+
+    if (progressData && progressData.current_time > 0) {
+      savedTime.value = progressData.current_time
+    } else {
+      const progressKey = `progress_ep_${epId}`
+      const localProgress = localStorage.getItem(progressKey)
+      if (localProgress) savedTime.value = parseFloat(localProgress)
+    }
 
   } catch (err) {
     console.error('載入失敗:', err.message)
@@ -159,21 +178,52 @@ const showMessage = (msg) => {
   setTimeout(() => { actionMessage.value = '' }, 3000)
 }
 
-const manualSaveProgress = () => {
+const manualSaveProgress = async () => {
   if (videoPlayer.value && episode.value) {
+    const currentTime = videoPlayer.value.currentTime
+    
+    // 寫入本機
     const progressKey = `progress_ep_${episode.value.id}`
-    localStorage.setItem(progressKey, videoPlayer.value.currentTime)
-    savedTime.value = videoPlayer.value.currentTime
-    showMessage('✅ 觀看進度已手動儲存！')
+    localStorage.setItem(progressKey, currentTime)
+    savedTime.value = currentTime
+
+    // 寫入雲端 (Upsert)
+    const { error } = await supabase
+      .from('playback_progress')
+      .upsert({ 
+        video_id: episode.value.id, 
+        current_time: currentTime,
+        updated_at: new Date().toISOString()
+      }, { onConflict: 'video_id' })
+
+    if (error) {
+      console.error(error)
+      showMessage('❌ 雲端同步失敗，僅存於本機')
+    } else {
+      showMessage('☁️ ✅ 觀看進度已手動儲存至雲端！')
+    }
   }
 }
 
-const clearProgress = () => {
+const clearProgress = async () => {
   if (episode.value) {
+    // 清除本機
     const progressKey = `progress_ep_${episode.value.id}`
     localStorage.removeItem(progressKey)
     savedTime.value = 0
-    showMessage('🗑️ 觀看紀錄已成功清除！')
+
+    // 清除雲端
+    const { error } = await supabase
+      .from('playback_progress')
+      .delete()
+      .eq('video_id', episode.value.id)
+
+    if (error) {
+      console.error(error)
+      showMessage('❌ 雲端清除失敗')
+    } else {
+      showMessage('🗑️ 雲端與本機的觀看紀錄已成功清除！')
+    }
   }
 }
 
@@ -184,7 +234,6 @@ const resumeProgress = () => {
 }
 
 const onTimeUpdate = () => {
-  // 每隔 5 秒才自動儲存一次，減少效能消耗與錯誤覆寫
   if (videoPlayer.value && episode.value && Math.floor(videoPlayer.value.currentTime) % 5 === 0) {
     const progressKey = `progress_ep_${episode.value.id}`
     localStorage.setItem(progressKey, videoPlayer.value.currentTime)
