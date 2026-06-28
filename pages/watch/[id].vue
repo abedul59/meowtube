@@ -35,7 +35,7 @@
           </video>
         </div>
 
-        <!-- 💡 新增：觀看紀錄控制面板 -->
+        <!-- 💡 觀看紀錄控制面板 -->
         <div class="flex flex-wrap items-center gap-3 bg-gray-800/50 p-3 rounded-lg border border-gray-700/50">
           <button @click="manualSaveProgress" class="px-4 py-2 bg-red-600 hover:bg-red-700 text-white text-sm font-bold rounded shadow transition">
             💾 記憶觀看時間
@@ -88,13 +88,25 @@ const fetchMovieData = async () => {
     loading.value = true
     const movieId = route.params.id
 
+    // 1. 取得電影資料
     const { data, error } = await supabase.from('movies').select('*').eq('id', movieId).single()
     if (error) throw error
     movie.value = data
 
-    const progressKey = `progress_movie_${movieId}`
-    const localProgress = localStorage.getItem(progressKey)
-    if (localProgress) savedTime.value = parseFloat(localProgress)
+    // 2. 雲端優先讀取進度
+    const { data: progressData } = await supabase
+      .from('playback_progress')
+      .select('current_time')
+      .eq('video_id', movieId)
+      .maybeSingle()
+
+    if (progressData && progressData.current_time > 0) {
+      savedTime.value = progressData.current_time
+    } else {
+      const progressKey = `progress_movie_${movieId}`
+      const localProgress = localStorage.getItem(progressKey)
+      if (localProgress) savedTime.value = parseFloat(localProgress)
+    }
 
   } catch (err) {
     console.error('載入失敗:', err.message)
@@ -117,21 +129,52 @@ const showMessage = (msg) => {
   setTimeout(() => { actionMessage.value = '' }, 3000)
 }
 
-const manualSaveProgress = () => {
+const manualSaveProgress = async () => {
   if (videoPlayer.value && movie.value) {
+    const currentTime = videoPlayer.value.currentTime
+    
+    // 寫入本機
     const progressKey = `progress_movie_${movie.value.id}`
-    localStorage.setItem(progressKey, videoPlayer.value.currentTime)
-    savedTime.value = videoPlayer.value.currentTime
-    showMessage('✅ 觀看進度已手動儲存！')
+    localStorage.setItem(progressKey, currentTime)
+    savedTime.value = currentTime
+
+    // 寫入雲端 (Upsert)
+    const { error } = await supabase
+      .from('playback_progress')
+      .upsert({ 
+        video_id: movie.value.id, 
+        current_time: currentTime,
+        updated_at: new Date().toISOString()
+      }, { onConflict: 'video_id' })
+
+    if (error) {
+      console.error(error)
+      showMessage('❌ 雲端同步失敗，僅存於本機')
+    } else {
+      showMessage('☁️ ✅ 觀看進度已手動儲存至雲端！')
+    }
   }
 }
 
-const clearProgress = () => {
+const clearProgress = async () => {
   if (movie.value) {
+    // 清除本機
     const progressKey = `progress_movie_${movie.value.id}`
     localStorage.removeItem(progressKey)
     savedTime.value = 0
-    showMessage('🗑️ 觀看紀錄已成功清除！')
+
+    // 清除雲端
+    const { error } = await supabase
+      .from('playback_progress')
+      .delete()
+      .eq('video_id', movie.value.id)
+
+    if (error) {
+      console.error(error)
+      showMessage('❌ 雲端清除失敗')
+    } else {
+      showMessage('🗑️ 雲端與本機的觀看紀錄已成功清除！')
+    }
   }
 }
 
