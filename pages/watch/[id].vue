@@ -22,7 +22,7 @@
             @loadedmetadata="resumeProgress"
             @timeupdate="onTimeUpdate"
           >
-            <source :src="`https://lawxstudents168-meowtube-api.hf.space/stream/${movie.tg_message_id}`" type="video/mp4" />
+            <source :src="`https://meowtube-api-10n0.onrender.com//stream/${movie.tg_message_id}`" type="video/mp4" />
             <track 
               v-for="(sub, index) in movie.subtitles" 
               :key="index"
