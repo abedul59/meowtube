@@ -170,7 +170,10 @@ import { ref, reactive, onMounted } from 'vue'
 const supabase = useSupabaseClient()
   
 //const API_BASE_URL = 'https://lawxstudents168-meowtube-api.hf.space'
-const API_BASE_URL = 'https://meowtube-api-10n0.onrender.com/'
+// 動態取得當下負責值班的 API 網址
+const API_BASE_URL = getActiveApiUrl()
+
+  
 const activeTab = ref('movie')
 const file = ref(null)
 const isUploading = ref(false)
