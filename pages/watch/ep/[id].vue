@@ -28,7 +28,7 @@
               @timeupdate="onTimeUpdate"
               @ended="playNextEpisode"
             >
-              <source :src="`https://meowtube-api-10n0.onrender.com/stream/${episode.tg_message_id}`" type="video/mp4" />
+              <source :src="`${getActiveApiUrl()}/stream/${episode.tg_message_id}`" type="video/mp4" />
               <track 
                 v-for="(sub, index) in episode.subtitles" 
                 :key="index"
