@@ -46,12 +46,11 @@ const episodesData = ref([])
 
 onMounted(async () => {
   // 1. 檢查 sessionStorage 權限
-  //const secretAuth = sessionStorage.getItem('secret_zone_auth')
-  //if (secretAuth !== 'true') {
-    // 如果沒有權限，直接踢回私密區首頁或密碼輸入頁
-    //router.push('/secret-zone')
-    //return
-  //}
+const secretAuth = sessionStorage.getItem('isSecretUnlocked')
+if (secretAuth !== 'yes') {
+  router.push('/secret-zone')
+  return
+}
   
   isAuthenticated.value = true
 
