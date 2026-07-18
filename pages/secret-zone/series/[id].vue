@@ -24,13 +24,14 @@
       
       <div v-else class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
         <div 
-          v-for="episode in episodesData" 
-          :key="episode.id"
+          v-for="ep in episodesData" 
+          :key="ep.id"
           class="border border-gray-700 p-5 rounded-lg hover:bg-gray-800 hover:border-purple-500 cursor-pointer transition-all shadow-md"
-          @click="goToPlay(episode.id)"
+          @click="goToPlay(ep.id)"
         >
-          <h3 class="text-xl font-bold text-blue-300 mb-2">第 {{ episode.episode_number }} 集</h3>
-          <p class="text-gray-400 truncate" :title="episode.title">{{ episode.title }}</p>
+          <!-- 💡 這裡已經修正為 ep.episode -->
+          <h3 class="text-xl font-bold text-blue-300 mb-2">第 {{ ep.episode }} 集</h3>
+          <p class="text-gray-400 truncate" :title="ep.title">{{ ep.title }}</p>
         </div>
       </div>
     </div>
@@ -43,10 +44,8 @@ import { useRoute, useRouter } from 'vue-router'
 
 const route = useRoute()
 const router = useRouter()
-// 呼叫 Nuxt 3 內建的 Supabase 客戶端
 const supabase = useSupabaseClient() 
 
-// 從網址列取得影集的 UUID
 const seriesId = route.params.id
 
 const pending = ref(true)
@@ -54,29 +53,21 @@ const error = ref(null)
 const seriesData = ref(null)
 const episodesData = ref([])
 
-// 點擊集數時，跳轉到私密播放頁面
 const goToPlay = (episodeId) => {
-  // 假設您之後會建立一個專門播放私密影片的頁面
   router.push(`/secret-zone/play/${episodeId}`)
 }
 
 onMounted(async () => {
-  // =====================================================================
-  // 🛡️ 權限檢查區塊 (目前已註解，讓您能直接看到畫面！)
-  // =====================================================================
-  // 等您確認畫面上都有抓到資料後，請把下面這段解開，
-  // 並把 '您設定的密碼Key' 換成您當初在密碼頁寫入 sessionStorage 的名稱。
+  // 權限檢查區塊 (目前已註解，讓您能直接看到畫面確認資料！)
   /*
   const isUnlocked = sessionStorage.getItem('您設定的密碼Key') 
   if (!isUnlocked) {
-    router.push('/secret-zone') // 沒鑰匙就踢回去
+    router.push('/secret-zone') 
     return
   }
   */
-  // =====================================================================
 
   try {
-    // 1. 查詢私密影集主檔 (抓標題、簡介)
     const { data: series, error: seriesError } = await supabase
       .from('secret_series')
       .select('*')
@@ -86,12 +77,12 @@ onMounted(async () => {
     if (seriesError) throw seriesError
     seriesData.value = series
 
-    // 2. 查詢該影集底下的私密集數，並依集數排序
+    // 💡 這裡的排序條件已經修正為 'episode'
     const { data: episodes, error: episodesError } = await supabase
       .from('secret_episodes')
       .select('*')
       .eq('series_id', seriesId)
-      .order('episode_number', { ascending: true })
+      .order('episode', { ascending: true })
 
     if (episodesError) throw episodesError
     episodesData.value = episodes
@@ -100,7 +91,7 @@ onMounted(async () => {
     console.error('抓取資料失敗:', err)
     error.value = err
   } finally {
-    pending.value = false // 關閉載入中動畫
+    pending.value = false 
   }
 })
 </script>
