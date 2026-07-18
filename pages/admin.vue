@@ -1,388 +1,282 @@
 <template>
-  <div class="max-w-4xl mx-auto py-8 px-4">
-    <button @click="$router.back()" class="mb-6 inline-flex items-center text-gray-300 hover:text-white transition-colors font-bold bg-gray-800 px-4 py-2 rounded-lg shadow border border-gray-700">
-      ⬅ 返回上一頁
-    </button>
-    <h1 class="text-3xl font-bold mb-8 text-white">⚙️ 劇院管理後台</h1>
-
-    <div class="flex flex-wrap gap-2 mb-6">
-      <button @click="activeTab = 'movie'" :class="activeTab === 'movie' ? 'bg-red-600 text-white shadow-lg' : 'bg-gray-800 text-gray-400 hover:bg-gray-700'" class="px-5 py-3 rounded-t-xl font-bold transition-colors flex-1 sm:flex-none">
-        🎬 單部電影
-      </button>
-      <button @click="activeTab = 'series'" :class="activeTab === 'series' ? 'bg-indigo-600 text-white shadow-lg' : 'bg-gray-800 text-gray-400 hover:bg-gray-700'" class="px-5 py-3 rounded-t-xl font-bold transition-colors flex-1 sm:flex-none">
-        🆕 新建影集
-      </button>
-      <button @click="activeTab = 'episode'" :class="activeTab === 'episode' ? 'bg-indigo-600 text-white shadow-lg' : 'bg-gray-800 text-gray-400 hover:bg-gray-700'" class="px-5 py-3 rounded-t-xl font-bold transition-colors flex-1 sm:flex-none">
-        📺 單集上傳
-      </button>
-      <button @click="activeTab = 'batch'" :class="activeTab === 'batch' ? 'bg-teal-600 text-white shadow-lg' : 'bg-gray-800 text-gray-400 hover:bg-gray-700'" class="px-5 py-3 rounded-t-xl font-bold transition-colors flex-1 sm:flex-none">
-        📚 批次上傳
-      </button>
-    </div>
-
-    <div class="bg-gray-800 p-6 md:p-8 rounded-b-xl rounded-tr-xl border border-gray-700 shadow-xl relative overflow-hidden">
-      
-      <div v-if="activeTab === 'movie'" class="animate-fade-in">
-        <form @submit.prevent="handleUploadMovie" class="space-y-6">
-          <h2 class="text-xl font-semibold mb-4 text-red-500 border-b border-gray-700 pb-2">上傳獨立電影</h2>
-          <div><label class="block text-sm font-medium text-gray-300 mb-2">選擇影片檔 (MP4)</label><input type="file" @change="e => file = e.target.files[0]" accept="video/*" required class="file-input" /></div>
-          <div><label class="block text-sm font-medium text-gray-300 mb-2">電影名稱</label><input type="text" v-model="movieForm.title" required class="form-input" /></div>
-          <div><label class="block text-sm font-medium text-gray-300 mb-2">劇情簡介</label><textarea v-model="movieForm.description" rows="3" class="form-input"></textarea></div>
-          <div><label class="block text-sm font-medium text-gray-300 mb-2">海報圖片網址 (選填)</label><input type="url" v-model="movieForm.coverUrl" class="form-input" /></div>
-          <div><label class="block text-sm font-medium text-gray-300 mb-2">Telegram Topic ID (若無可留空)</label><input type="number" v-model="movieForm.topicId" class="form-input" /></div>
-          <button type="submit" :disabled="isUploading" class="submit-btn bg-red-600 hover:bg-red-700"><span v-if="isUploading" class="spinner"></span>{{ isUploading ? uploadStatus : '🚀 確認上傳並發布電影' }}</button>
-        </form>
-
-        <div class="mt-10 pt-8 border-t border-gray-700">
-          <h2 class="text-lg font-semibold mb-4 text-gray-400">🔍 取得已上傳電影的 UUID (用於外掛字幕)</h2>
-          <select v-model="selectedMovieId" class="form-input focus:border-red-500">
-            <option value="" disabled>請選擇你想查詢的電影...</option>
-            <option v-for="m in movieList" :key="m.id" :value="m.id">{{ m.title }}</option>
-          </select>
-
-          <div v-if="selectedMovieId" class="mt-3 p-3 bg-gray-900 rounded-lg border border-red-800/50 flex flex-col gap-2 animate-fade-in">
-            <div class="flex justify-between items-center">
-              <span class="text-xs text-red-400 font-bold">💡 貼入 Python 字幕工具的「影片 UUID」：</span>
-              <button @click.prevent="copyToClipboard(selectedMovieId)" class="text-xs bg-red-700 hover:bg-red-600 text-white px-3 py-1.5 rounded transition flex items-center gap-1 shadow">
-                {{ copyStatus || '📋 複製 UUID' }}
-              </button>
-            </div>
-            <code class="text-sm text-gray-300 select-all font-mono bg-black/50 p-2 rounded block break-all text-center border border-gray-800">
-              {{ selectedMovieId }}
-            </code>
-          </div>
-        </div>
+  <div class="min-h-screen bg-gray-900 text-white p-4 md:p-8">
+    <div class="max-w-4xl mx-auto">
+      <!-- 頂部導覽列 -->
+      <div class="flex justify-between items-center mb-8">
+        <button @click="$router.push('/')" class="text-gray-400 hover:text-white transition font-bold bg-gray-800 px-4 py-2 rounded-lg border border-gray-700 shadow-sm">
+          🏠 返回首頁
+        </button>
+        <!-- 🔒 私密後台按鈕 -->
+        <button @click="goToPrivateZone" class="bg-gray-800 border border-gray-700 hover:border-red-500 px-4 py-2 rounded text-gray-400 hover:text-red-500 transition font-bold">
+          🔞 前往私密後台
+        </button>
       </div>
 
-      <form v-if="activeTab === 'series'" @submit.prevent="handleCreateSeries" class="space-y-6 animate-fade-in">
-        <h2 class="text-xl font-semibold mb-4 text-indigo-400 border-b border-gray-700 pb-2">建立新影集 (免上傳檔案)</h2>
-        <div><label class="block text-sm font-medium text-gray-300 mb-2">影集名稱</label><input type="text" v-model="seriesForm.title" required class="form-input" /></div>
-        <div><label class="block text-sm font-medium text-gray-300 mb-2">劇情簡介</label><textarea v-model="seriesForm.description" rows="3" class="form-input"></textarea></div>
-        <div><label class="block text-sm font-medium text-gray-300 mb-2">影集海報網址</label><input type="url" v-model="seriesForm.coverUrl" class="form-input" /></div>
-        
-        <div class="flex items-center gap-3 bg-gray-900 p-4 rounded-lg border border-gray-700 mt-4">
-          <input type="checkbox" id="isAudio" v-model="seriesForm.isAudio" class="w-5 h-5 text-indigo-600 bg-gray-800 border-gray-600 rounded focus:ring-indigo-500">
-          <label for="isAudio" class="text-sm font-bold text-indigo-300 cursor-pointer">🎧 這是一套純聲音的「有聲書 / 廣播劇」</label>
+      <div class="bg-gray-800 rounded-xl shadow-xl border border-gray-700 overflow-hidden">
+        <div class="p-6 border-b border-gray-700 bg-gray-800/80">
+          <h2 class="text-2xl font-bold text-white flex items-center gap-2">
+            <span>🎬 上傳影片至 Meowtube</span>
+          </h2>
         </div>
 
-        <button type="submit" :disabled="isUploading" class="submit-btn bg-indigo-600 hover:bg-indigo-700"><span v-if="isUploading" class="spinner"></span>{{ isUploading ? '建立中...' : '✨ 建立新影集' }}</button>
-      </form>
+        <form @submit.prevent="handleUpload" class="p-6 space-y-6">
+          
+          <!-- 💡 私密影片開關 -->
+          <div class="bg-gray-900 p-4 rounded-lg border border-gray-700 transition-colors" :class="{ 'border-red-500/50 bg-red-900/10': uploadForm.isSecret }">
+            <label class="flex items-center cursor-pointer gap-3">
+              <input 
+                type="checkbox" 
+                v-model="uploadForm.isSecret"
+                class="w-6 h-6 text-red-600 bg-gray-800 border-gray-600 rounded focus:ring-red-500 focus:ring-2"
+              >
+              <span class="text-white font-bold text-lg" :class="{ 'text-red-400': uploadForm.isSecret }">
+                🔞 標記為私密影片 (上傳至私密 Telegram 群組與獨立資料表)
+              </span>
+            </label>
+          </div>
 
-      <form v-if="activeTab === 'episode'" @submit.prevent="handleUploadEpisode" class="space-y-6 animate-fade-in">
-        <h2 class="text-xl font-semibold mb-4 text-indigo-400 border-b border-gray-700 pb-2">上傳影集單集</h2>
-        
-        <div>
-          <label class="block text-sm font-medium text-gray-300 mb-2">選擇影集</label>
-          <select v-model="episodeForm.seriesId" required class="form-input">
-            <option value="" disabled>請選擇影集...</option>
-            <option v-for="s in seriesList" :key="s.id" :value="s.id">{{ s.title }}</option>
-          </select>
+          <!-- 影片類型選擇 -->
+          <div class="grid grid-cols-2 gap-4">
+            <label :class="['cursor-pointer border p-4 rounded-lg text-center font-bold transition', uploadForm.type === 'movie' ? 'border-indigo-500 bg-indigo-600/20 text-indigo-300' : 'border-gray-700 hover:bg-gray-700 text-gray-400']">
+              <input type="radio" v-model="uploadForm.type" value="movie" class="hidden">
+              獨立電影
+            </label>
+            <label :class="['cursor-pointer border p-4 rounded-lg text-center font-bold transition', uploadForm.type === 'episode' ? 'border-indigo-500 bg-indigo-600/20 text-indigo-300' : 'border-gray-700 hover:bg-gray-700 text-gray-400']">
+              <input type="radio" v-model="uploadForm.type" value="episode" class="hidden">
+              影集單集
+            </label>
+          </div>
 
-          <div v-if="episodeForm.seriesId" class="mt-3 p-3 bg-gray-900 rounded-lg border border-indigo-800/50 flex flex-col gap-2 animate-fade-in">
-            <div class="flex justify-between items-center">
-              <span class="text-xs text-indigo-400 font-bold">💡 貼入 Go 直傳軟體的「影集 UUID」：</span>
-              <button @click.prevent="copyToClipboard(episodeForm.seriesId)" class="text-xs bg-indigo-700 hover:bg-indigo-600 text-white px-3 py-1.5 rounded transition flex items-center gap-1 shadow">
-                {{ copyStatus || '📋 複製 UUID' }}
-              </button>
+          <!-- 檔案上傳 -->
+          <div>
+            <label class="block text-sm font-medium text-gray-400 mb-2">選擇影片檔案 (MP4)</label>
+            <input type="file" accept="video/mp4,video/x-m4v,video/*" @change="onFileChange" required class="block w-full text-sm text-gray-400 file:mr-4 file:py-2 file:px-4 file:rounded file:border-0 file:text-sm file:font-bold file:bg-indigo-600 file:text-white hover:file:bg-indigo-700 transition" />
+          </div>
+
+          <!-- 基本資訊 -->
+          <div>
+            <label class="block text-sm font-medium text-gray-400 mb-2">標題</label>
+            <input type="text" v-model="uploadForm.title" required class="w-full bg-gray-900 border border-gray-700 rounded-lg px-4 py-2 text-white focus:outline-none focus:border-indigo-500">
+          </div>
+
+          <div>
+            <label class="block text-sm font-medium text-gray-400 mb-2">描述 (選填)</label>
+            <textarea v-model="uploadForm.description" rows="3" class="w-full bg-gray-900 border border-gray-700 rounded-lg px-4 py-2 text-white focus:outline-none focus:border-indigo-500"></textarea>
+          </div>
+
+          <!-- 影集專屬資訊 -->
+          <div v-if="uploadForm.type === 'episode'" class="p-4 bg-gray-900 rounded-lg border border-gray-700 space-y-4">
+            <div>
+              <label class="block text-sm font-medium text-gray-400 mb-2">選擇所屬影集</label>
+              <select v-model="uploadForm.seriesId" class="w-full bg-gray-800 border border-gray-700 rounded-lg px-4 py-2 text-white focus:outline-none focus:border-indigo-500">
+                <option value="" disabled>請選擇影集...</option>
+                <option v-for="s in currentSeriesList" :key="s.id" :value="s.id">{{ s.title }}</option>
+              </select>
+              <p v-if="uploadForm.isSecret" class="text-xs text-red-400 mt-1">⚠️ 提示：目前正在讀取 `secret_series` 資料表。</p>
             </div>
-            <code class="text-sm text-gray-300 select-all font-mono bg-black/50 p-2 rounded block break-all text-center border border-gray-800">
-              {{ episodeForm.seriesId }}
-            </code>
-          </div>
-        </div>
-
-        <div class="flex gap-4">
-          <div class="flex-1"><label class="block text-sm font-medium text-gray-300 mb-2">第幾季？</label><input type="number" v-model="episodeForm.season" required min="1" class="form-input" /></div>
-          <div class="flex-1"><label class="block text-sm font-medium text-gray-300 mb-2">第幾集？</label><input type="number" v-model="episodeForm.episode" required min="1" class="form-input" /></div>
-        </div>
-        <div><label class="block text-sm font-medium text-gray-300 mb-2">單集名稱 (選填)</label><input type="text" v-model="episodeForm.title" class="form-input" /></div>
-        <div><label class="block text-sm font-medium text-gray-300 mb-2">Telegram Topic ID (若無可留空)</label><input type="number" v-model="episodeForm.topicId" class="form-input" /></div>
-        <div><label class="block text-sm font-medium text-gray-300 mb-2">選擇檔案 (影片或 MP3)</label><input type="file" @change="e => file = e.target.files[0]" accept="video/*,audio/*" required class="file-input" /></div>
-        <button type="submit" :disabled="isUploading || seriesList.length === 0" class="submit-btn bg-indigo-600 hover:bg-indigo-700"><span v-if="isUploading" class="spinner"></span>{{ isUploading ? uploadStatus : '🚀 確認上傳集數' }}</button>
-      </form>
-
-      <form v-if="activeTab === 'batch'" @submit.prevent="handleBatchUpload" class="space-y-6 animate-fade-in">
-        <h2 class="text-xl font-semibold mb-2 text-teal-400 border-b border-gray-700 pb-2">📚 批次排隊上傳</h2>
-        <p class="text-sm text-teal-200 mb-4 bg-teal-900/30 p-3 rounded-lg border border-teal-800">
-          💡 系統會採用「排隊模式」一集傳完才傳下一集，完美避開雲端超載問題。上傳期間請<b>不要關閉或重新整理此網頁</b>。
-        </p>
-        
-        <div>
-          <label class="block text-sm font-medium text-gray-300 mb-2">目標影集</label>
-          <select v-model="batchForm.seriesId" required class="form-input focus:border-teal-500">
-            <option value="" disabled>請選擇要上傳到的影集...</option>
-            <option v-for="s in seriesList" :key="s.id" :value="s.id">{{ s.title }}</option>
-          </select>
-
-          <div v-if="batchForm.seriesId" class="mt-3 p-3 bg-gray-900 rounded-lg border border-teal-800/50 flex flex-col gap-2 animate-fade-in">
-            <div class="flex justify-between items-center">
-              <span class="text-xs text-teal-400 font-bold">💡 貼入 Go 直傳軟體的「影集 UUID」：</span>
-              <button @click.prevent="copyToClipboard(batchForm.seriesId)" class="text-xs bg-teal-700 hover:bg-teal-600 text-white px-3 py-1.5 rounded transition flex items-center gap-1 shadow">
-                {{ copyStatus || '📋 複製 UUID' }}
-              </button>
+            <div class="grid grid-cols-2 gap-4">
+              <div>
+                <label class="block text-sm font-medium text-gray-400 mb-2">季數 (Season)</label>
+                <input type="number" v-model="uploadForm.season" min="1" class="w-full bg-gray-800 border border-gray-700 rounded-lg px-4 py-2 text-white">
+              </div>
+              <div>
+                <label class="block text-sm font-medium text-gray-400 mb-2">集數 (Episode)</label>
+                <input type="number" v-model="uploadForm.episode" min="1" class="w-full bg-gray-800 border border-gray-700 rounded-lg px-4 py-2 text-white">
+              </div>
             </div>
-            <code class="text-sm text-gray-300 select-all font-mono bg-black/50 p-2 rounded block break-all text-center border border-gray-800">
-              {{ batchForm.seriesId }}
-            </code>
           </div>
-        </div>
 
-        <div class="flex gap-4">
-          <div class="flex-1"><label class="block text-sm font-medium text-gray-300 mb-2">這是第幾季？(Season)</label><input type="number" v-model="batchForm.season" required min="1" class="form-input focus:border-teal-500" /></div>
-          <div class="flex-1"><label class="block text-sm font-medium text-gray-300 mb-2">起始集數 (Episode)</label><input type="number" v-model="batchForm.startEpisode" required min="1" class="form-input focus:border-teal-500" /><p class="text-xs text-gray-400 mt-1">例如填入 1，選擇的檔案就會依序被標記為 1, 2, 3...</p></div>
-        </div>
-
-        <div><label class="block text-sm font-medium text-gray-300 mb-2">Telegram Topic ID (若無可留空)</label><input type="number" v-model="batchForm.topicId" class="form-input focus:border-teal-500" /></div>
-        <div><label class="block text-sm font-medium text-gray-300 mb-2">選擇該季的所有檔案 (支援影片與 MP3，可多選)</label><input type="file" @change="onBatchFileChange" accept="video/*,audio/*" multiple required class="file-input bg-gray-800 border border-gray-600" /></div>
-
-        <div v-if="batchFiles.length > 0 && !batchStatus.isUploading" class="bg-gray-900 rounded-lg p-4 border border-gray-700 max-h-48 overflow-y-auto">
-          <h3 class="text-sm font-bold text-gray-300 mb-2">即將上傳 {{ batchFiles.length }} 個檔案 (系統已自動排序)：</h3>
-          <ul class="text-sm text-gray-400 space-y-1">
-            <li v-for="(f, i) in batchFiles" :key="i" class="flex justify-between">
-              <span class="truncate pr-4"><span class="text-teal-400 font-bold w-12 inline-block">EP {{ batchForm.startEpisode + i }}</span> {{ f.name }}</span>
-              <span class="text-gray-500 shrink-0">{{ (f.size / 1024 / 1024).toFixed(1) }} MB</span>
-            </li>
-          </ul>
-        </div>
-
-        <div v-if="batchStatus.isUploading || batchStatus.log" class="bg-black rounded-lg p-4 border border-gray-700">
-          <div class="flex justify-between items-center mb-2">
-            <span class="text-teal-400 font-bold text-sm">{{ batchStatus.isUploading ? `上傳進度: ${batchStatus.currentIndex} / ${batchStatus.total}` : '批次上傳已結束' }}</span>
-            <span class="text-gray-400 text-xs">成功: {{ batchStatus.success }} | 失敗: {{ batchStatus.fail }}</span>
-          </div>
-          <div class="w-full bg-gray-800 rounded-full h-2 mb-4 overflow-hidden"><div class="bg-teal-500 h-2 rounded-full transition-all duration-300" :style="`width: ${(batchStatus.currentIndex / batchStatus.total) * 100}%`"></div></div>
-          <pre class="text-xs text-green-400 font-mono whitespace-pre-wrap max-h-40 overflow-y-auto">{{ batchStatus.log }}</pre>
-        </div>
-
-        <button type="submit" :disabled="batchStatus.isUploading || batchFiles.length === 0" class="w-full bg-teal-600 hover:bg-teal-700 text-white font-bold py-3 px-4 rounded-md transition-colors disabled:bg-gray-600 disabled:cursor-not-allowed flex justify-center items-center gap-2">
-          <span v-if="batchStatus.isUploading" class="spinner"></span>
-          {{ batchStatus.isUploading ? '批次上傳執行中... 請勿關閉網頁' : `🚀 開始批次上傳 ${batchFiles.length} 集` }}
-        </button>
-      </form>
-
+          <!-- 提交按鈕 -->
+          <button type="submit" :disabled="isUploading" :class="[
+            'w-full font-bold py-3 px-4 rounded-lg transition shadow flex justify-center items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed',
+            uploadForm.isSecret ? 'bg-red-600 hover:bg-red-700 text-white' : 'bg-indigo-600 hover:bg-indigo-700 text-white'
+          ]">
+            <span v-if="isUploading" class="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin"></span>
+            {{ isUploading ? '上傳與處理中，請勿關閉視窗...' : (uploadForm.isSecret ? '🔞 確認上傳私密影片' : '開始上傳影片') }}
+          </button>
+          
+          <p v-if="uploadStatus" :class="['text-center font-bold mt-4', statusColor]">{{ uploadStatus }}</p>
+        </form>
+      </div>
     </div>
   </div>
 </template>
 
 <script setup>
-import { ref, reactive, onMounted } from 'vue'
+import { ref, onMounted, computed, watch } from 'vue'
+import { useRouter } from 'vue-router'
 
+const router = useRouter()
 const supabase = useSupabaseClient()
-  
-//const API_BASE_URL = 'https://lawxstudents168-meowtube-api.hf.space'
-// 動態取得當下負責值班的 API 網址
-const API_BASE_URL = getActiveApiUrl()
 
-  
-const activeTab = ref('movie')
-const file = ref(null)
-const isUploading = ref(false)
-const uploadStatus = ref('')
-
-// 影集與電影清單
-const seriesList = ref([])
-const movieList = ref([])
-const selectedMovieId = ref('') // 用於查詢電影 UUID
-
-// 💡 複製功能狀態
-const copyStatus = ref('')
-
-// 表單狀態
-const movieForm = reactive({ title: '', description: '', coverUrl: '', topicId: '' })
-const seriesForm = reactive({ title: '', description: '', coverUrl: '', isAudio: false })
-const episodeForm = reactive({ seriesId: '', season: 1, episode: 1, title: '', topicId: '' })
-const batchForm = reactive({ seriesId: '', season: 1, startEpisode: 1, topicId: '' })
-const batchFiles = ref([])
-const batchStatus = ref({ isUploading: false, currentIndex: 0, total: 0, success: 0, fail: 0, log: '' })
-
-// 載入影集
-const fetchSeries = async () => {
-  const { data } = await supabase.from('series').select('id, title').order('created_at', { ascending: false })
-  if (data) seriesList.value = data
+// 從工具函式獲取自動分流的 API 網址 (如果您尚未建立 utils/apiManager.js，請直接將函數寫在這裡)
+const getActiveApiUrl = () => {
+  const today = new Date().getDate();
+  if (today <= 15) return 'https://meowtube-api-lawxstudent168.onrender.com';
+  return 'https://meowtube-api-10n0.onrender.com';
 }
 
-// 載入已上傳電影
-const fetchMovies = async () => {
-  const { data } = await supabase.from('movies').select('id, title').order('created_at', { ascending: false })
-  if (data) movieList.value = data
+const API_BASE_URL = getActiveApiUrl()
+
+const isUploading = ref(false)
+const uploadStatus = ref('')
+const statusType = ref('info')
+
+const publicSeriesList = ref([])
+const secretSeriesList = ref([])
+
+const uploadForm = ref({
+  type: 'movie',
+  isSecret: false, // 預設為公開影片
+  file: null,
+  title: '',
+  description: '',
+  seriesId: '',
+  season: 1,
+  episode: 1
+})
+
+const statusColor = computed(() => {
+  if (statusType.value === 'error') return 'text-red-400'
+  if (statusType.value === 'success') return 'text-green-400'
+  return 'text-indigo-400'
+})
+
+// 根據是否勾選私密，動態切換顯示的影集清單
+const currentSeriesList = computed(() => {
+  return uploadForm.value.isSecret ? secretSeriesList.value : publicSeriesList.value
+})
+
+// 前端簡易防護：前往私密後台
+const goToPrivateZone = () => {
+  const pwd = prompt('🔒 這是私密區域，請輸入管理員密碼：')
+  if (pwd === 'pornporn') {
+    // 寫入 sessionStorage，關閉瀏覽器即失效
+    sessionStorage.setItem('secret_auth', 'granted')
+    router.push('/secret-zone') 
+  } else if (pwd !== null) {
+    alert('❌ 密碼錯誤，拒絕存取。')
+  }
+}
+
+// 載入公開與私密影集清單
+const fetchSeries = async () => {
+  // 讀取公開影集
+  const { data: publicData } = await supabase.from('series').select('id, title').order('created_at', { ascending: false })
+  if (publicData) publicSeriesList.value = publicData
+
+  // 讀取私密影集 (假設您已經在 Supabase 建立了 secret_series 資料表)
+  const { data: secretData } = await supabase.from('secret_series').select('id, title').order('created_at', { ascending: false })
+  if (secretData) secretSeriesList.value = secretData
 }
 
 onMounted(() => {
   fetchSeries()
-  fetchMovies()
 })
 
-// ==========================================
-// 📋 複製 UUID 到剪貼簿功能
-// ==========================================
-const copyToClipboard = async (textToCopy) => {
-  try {
-    await navigator.clipboard.writeText(textToCopy)
-    copyStatus.value = '✅ 已複製!'
-    // 兩秒後恢復按鈕原本文字
-    setTimeout(() => { copyStatus.value = '' }, 2000)
-  } catch (err) {
-    alert('瀏覽器不支援自動複製，請手動選取文字進行複製。')
-  }
-}
+// 當切換公開/私密時，清空已經選取的影集 ID，避免資料錯亂
+watch(() => uploadForm.value.isSecret, () => {
+  uploadForm.value.seriesId = ''
+})
 
-// ==========================================
-// 共用：上傳檔案至 Hugging Face (輪詢機制)
-// ==========================================
-const uploadToHF = async (captionText, topicId, fileToUpload = file.value) => {
-  uploadStatus.value = '正在傳送檔案至雲端主機...'
-  const formData = new FormData()
-  formData.append('file', fileToUpload)
-  formData.append('caption', captionText)
-  
-  if (topicId) formData.append('topic_id', parseInt(topicId))
-
-  const uploadRes = await fetch(`${API_BASE_URL}/upload/`, { method: 'POST', body: formData })
-  if (!uploadRes.ok) throw new Error('雲端主機回應錯誤')
-  const uploadData = await uploadRes.json()
-  if (!uploadData.success) throw new Error(`上傳失敗: ${uploadData.detail}`)
-  
-  const taskId = uploadData.task_id
-  uploadStatus.value = '主機接收成功！正在轉發至 Telegram (大檔案需數分鐘，請勿關閉網頁)...'
-
-  return new Promise((resolve, reject) => {
-    const checkInterval = setInterval(async () => {
-      try {
-        const statusRes = await fetch(`${API_BASE_URL}/upload_status/${taskId}`)
-        if (!statusRes.ok) return 
-        
-        const statusData = await statusRes.json()
-        if (statusData.status === 'completed') {
-          clearInterval(checkInterval)
-          resolve(statusData.message_id)
-        } else if (statusData.status === 'failed') {
-          clearInterval(checkInterval)
-          reject(new Error(statusData.error || 'Telegram 轉發失敗'))
-        }
-      } catch (e) { }
-    }, 3000)
-  })
-}
-
-// 🎬 上傳電影
-const handleUploadMovie = async () => {
-  if (!file.value) return alert('請先選擇檔案！')
-  try {
-    isUploading.value = true
-    const messageId = await uploadToHF(`🎬 ${movieForm.title}\n${movieForm.description}`, movieForm.topicId)
-
-    uploadStatus.value = '檔案已上傳！正在寫入資料庫...'
-    const { error } = await supabase.from('movies').insert({
-      title: movieForm.title, description: movieForm.description, cover_url: movieForm.coverUrl,
-      topic_id: movieForm.topicId ? parseInt(movieForm.topicId) : null, tg_message_id: messageId
-    })
-    if (error) throw error
-
-    alert('✅ 電影上傳並發布成功！')
-    movieForm.title = ''; movieForm.description = ''; movieForm.coverUrl = ''; movieForm.topicId = ''; file.value = null
-    document.querySelector('.file-input').value = ''
-    
-    // 上傳成功後，重新抓取電影清單，讓下方的選單即時更新
-    await fetchMovies()
-  } catch (error) { alert(`❌ 發生錯誤：\n${error.message}`) } finally { isUploading.value = false }
-}
-
-// 🆕 新建影集
-const handleCreateSeries = async () => {
-  try {
-    isUploading.value = true
-    const { error } = await supabase.from('series').insert({
-      title: seriesForm.title, description: seriesForm.description, cover_url: seriesForm.coverUrl, is_audio: seriesForm.isAudio
-    })
-    if (error) throw error
-
-    alert('✨ 影集建立成功！請切換到「上傳影集單集」來上傳檔案。')
-    seriesForm.title = ''; seriesForm.description = ''; seriesForm.coverUrl = ''; seriesForm.isAudio = false
-    await fetchSeries()
-    activeTab.value = 'episode'
-  } catch (error) { alert(`❌ 發生錯誤：\n${error.message}`) } finally { isUploading.value = false }
-}
-
-// 📺 上傳單集
-const handleUploadEpisode = async () => {
-  if (!file.value) return alert('請先選擇檔案！')
-  if (!episodeForm.seriesId) return alert('請選擇要上傳的影集！')
-
-  try {
-    isUploading.value = true
-    const selectedSeries = seriesList.value.find(s => s.id === episodeForm.seriesId)
-    const captionText = `📺 ${selectedSeries.title} - S${episodeForm.season}E${episodeForm.episode} ${episodeForm.title}`
-    const messageId = await uploadToHF(captionText, episodeForm.topicId)
-
-    uploadStatus.value = '檔案已上傳！正在寫入資料庫...'
-    const { error } = await supabase.from('episodes').insert({
-      series_id: episodeForm.seriesId, season: episodeForm.season, episode: episodeForm.episode,
-      title: episodeForm.title, tg_message_id: messageId
-    })
-    if (error) throw error
-
-    alert('✅ 影集單集上傳成功！')
-    episodeForm.episode++ 
-    episodeForm.title = ''; file.value = null
-    document.querySelector('.file-input').value = ''
-  } catch (error) { alert(`❌ 發生錯誤：\n${error.message}`) } finally { isUploading.value = false }
-}
-
-// 📚 批次檔案變更
-const onBatchFileChange = (e) => {
-  const filesArray = Array.from(e.target.files)
-  filesArray.sort((a, b) => a.name.localeCompare(b.name, undefined, { numeric: true }))
-  batchFiles.value = filesArray
-}
-
-// 📚 批次上傳
-const handleBatchUpload = async () => {
-  if (batchFiles.value.length === 0) return alert('請選擇至少一個檔案！')
-  if (!batchForm.seriesId) return alert('請選擇要上傳的影集！')
-
-  const selectedSeries = seriesList.value.find(s => s.id === batchForm.seriesId)
-  batchStatus.value = { isUploading: true, currentIndex: 0, total: batchFiles.value.length, success: 0, fail: 0, log: `🎬 開始排隊上傳 ${selectedSeries.title} 第 ${batchForm.season} 季...\n` }
-  let currentEpNum = parseInt(batchForm.startEpisode)
-
-  for (let i = 0; i < batchFiles.value.length; i++) {
-    const currentFile = batchFiles.value[i]
-    batchStatus.value.currentIndex = i + 1
-    batchStatus.value.log += `\n⏳ [${i+1}/${batchStatus.value.total}] 正在上傳 EP ${currentEpNum}: ${currentFile.name}...`
-
-    try {
-      const captionText = `📺 ${selectedSeries.title} - S${batchForm.season}E${currentEpNum}`
-      const messageId = await uploadToHF(captionText, batchForm.topicId, currentFile)
-      batchStatus.value.log += `\n📦 檔案已上傳至雲端，寫入資料庫...`
-
-      const { error } = await supabase.from('episodes').insert({
-        series_id: batchForm.seriesId, season: batchForm.season, episode: currentEpNum, title: currentFile.name, tg_message_id: messageId
-      })
-      if (error) throw error
-      batchStatus.value.success++
-      batchStatus.value.log += ` ✅ 成功！`
-    } catch (err) {
-      batchStatus.value.fail++
-      batchStatus.value.log += ` ❌ 失敗: ${err.message}`
+const onFileChange = (e) => {
+  const file = e.target.files[0]
+  if (file) {
+    uploadForm.value.file = file
+    // 自動帶入檔名作為預設標題
+    if (!uploadForm.value.title) {
+      uploadForm.value.title = file.name.replace(/\.[^/.]+$/, "")
     }
-    currentEpNum++ 
+  }
+}
+
+const handleUpload = async () => {
+  if (!uploadForm.value.file) {
+    uploadStatus.value = '請選擇影片檔案'
+    statusType.value = 'error'
+    return
   }
 
-  batchStatus.value.isUploading = false
-  batchStatus.value.log += `\n\n🎉 批次任務結束！共計成功: ${batchStatus.value.success} 集, 失敗: ${batchStatus.value.fail} 集。`
-  if (batchStatus.value.fail === 0) {
-    batchFiles.value = []
-    const batchInput = document.querySelector('input[multiple]')
-    if (batchInput) batchInput.value = ''
-    batchForm.startEpisode = currentEpNum 
+  if (uploadForm.value.type === 'episode' && !uploadForm.value.seriesId) {
+    uploadStatus.value = '請選擇所屬影集'
+    statusType.value = 'error'
+    return
+  }
+
+  try {
+    isUploading.value = true
+    uploadStatus.value = '正在上傳至 Telegram (請保持網頁開啟)...'
+    statusType.value = 'info'
+
+    const formData = new FormData()
+    formData.append('file', uploadForm.value.file)
+    formData.append('title', uploadForm.value.title)
+    
+    // 💡 關鍵：將私密狀態傳給 Python API
+    formData.append('is_secret', uploadForm.value.isSecret) 
+
+    // 1. 上傳至 Python API
+    const response = await fetch(`${API_BASE_URL}/upload`, {
+      method: 'POST',
+      body: formData
+    })
+
+    if (!response.ok) {
+      const errData = await response.json()
+      throw new Error(errData.detail || 'API 上傳失敗')
+    }
+
+    const result = await response.json()
+    const tgMessageId = result.tg_message_id
+
+    uploadStatus.value = 'Telegram 上傳成功，正在寫入資料庫...'
+
+    // 2. 決定要寫入哪一張 Supabase 資料表
+    const targetMoviesTable = uploadForm.value.isSecret ? 'secret_movies' : 'movies'
+    const targetEpisodesTable = uploadForm.value.isSecret ? 'secret_episodes' : 'episodes'
+
+    if (uploadForm.value.type === 'movie') {
+      const { error: dbError } = await supabase.from(targetMoviesTable).insert({
+        title: uploadForm.value.title,
+        description: uploadForm.value.description,
+        tg_message_id: tgMessageId.toString()
+      })
+      if (dbError) throw dbError
+    } else {
+      const { error: dbError } = await supabase.from(targetEpisodesTable).insert({
+        series_id: uploadForm.value.seriesId,
+        season: uploadForm.value.season,
+        episode: uploadForm.value.episode,
+        title: uploadForm.value.title,
+        tg_message_id: tgMessageId.toString()
+      })
+      if (dbError) throw dbError
+    }
+
+    uploadStatus.value = uploadForm.value.isSecret ? '🔞 私密影片發布成功！' : '✅ 影片發布成功！'
+    statusType.value = 'success'
+    
+    // 重置表單 (保留原本選擇的 type 和 isSecret 狀態)
+    const currentType = uploadForm.value.type
+    const currentSecret = uploadForm.value.isSecret
+    uploadForm.value = {
+      type: currentType,
+      isSecret: currentSecret,
+      file: null,
+      title: '',
+      description: '',
+      seriesId: '',
+      season: 1,
+      episode: 1
+    }
+    document.querySelector('input[type="file"]').value = ''
+
+  } catch (error) {
+    console.error('Upload Error:', error)
+    uploadStatus.value = `❌ 錯誤: ${error.message}`
+    statusType.value = 'error'
+  } finally {
+    isUploading.value = false
   }
 }
 </script>
-
-<style scoped>
-.form-input { @apply w-full bg-gray-900 border border-gray-700 rounded-md py-2 px-3 text-white focus:outline-none focus:border-red-500 transition-colors; }
-.file-input { @apply w-full text-gray-300 file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0 file:text-sm file:font-semibold file:bg-gray-700 file:text-white hover:file:bg-gray-600 focus:outline-none cursor-pointer; }
-.submit-btn { @apply w-full text-white font-bold py-3 px-4 rounded-md transition-colors disabled:bg-gray-600 disabled:cursor-not-allowed flex justify-center items-center gap-2; }
-.spinner { @apply w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin; }
-.animate-fade-in { animation: fadeIn 0.3s ease-out; }
-@keyframes fadeIn { from { opacity: 0; transform: translateY(5px); } to { opacity: 1; transform: translateY(0); } }
-</style>
