@@ -13,7 +13,7 @@
       </div>
 
       <!-- ========================================== -->
-      <!-- 區塊 1：建立新影集系列 (已恢復) -->
+      <!-- 區塊 1：建立新影集系列 -->
       <!-- ========================================== -->
       <div class="bg-[#242731] rounded-xl shadow-xl border border-gray-700 overflow-hidden mb-8">
         <div class="p-6 border-b border-gray-700 bg-[#2a2d39]">
@@ -174,7 +174,7 @@
             {{ isUploading ? `上傳中 (${uploadProgress})...` : (uploadForm.isSecret ? '🔞 確認上傳私密影片' : '開始上傳影片') }}
           </button>
           
-          <p v-if="uploadStatus" :class="['text-center font-bold mt-4', statusColor]">{{ uploadStatus }}</p>
+          <p v-if="uploadStatus" :class="['text-center font-bold mt-4 break-all', statusColor]">{{ uploadStatus }}</p>
         </form>
       </div>
     </div>
@@ -266,7 +266,8 @@ watch(() => uploadForm.value.isSecret, () => {
 // 切換上傳模式時，清空檔案
 watch(() => uploadForm.value.isBatch, () => {
   uploadForm.value.files = []
-  document.querySelector('input[type="file"]').value = ''
+  const fileInput = document.querySelector('input[type="file"]')
+  if (fileInput) fileInput.value = ''
 })
 
 const handleCreateSeries = async () => {
@@ -354,12 +355,24 @@ const handleUpload = async () => {
       })
 
       if (!response.ok) {
-        const errData = await response.json()
-        throw new Error(errData.detail || `檔案 ${currentFile.name} API 上傳失敗`)
+        // 安全地解析錯誤訊息
+        const errData = await response.json().catch(() => ({}))
+        throw new Error(errData.detail || `檔案 ${currentFile.name} API 上傳失敗 (HTTP 狀態碼: ${response.status})`)
       }
 
       const result = await response.json()
-      const tgMessageId = result.tg_message_id
+      
+      // 💡 [修復重點]：安全地抓取 ID，並防止 undefined 錯誤
+      // 同時兼容 tg_message_id, message_id 或 id 等不同的回傳命名
+      const rawMsgId = result.tg_message_id || result.message_id || result.id
+      
+      if (rawMsgId === undefined || rawMsgId === null) {
+        console.error('API 回傳內容異常:', result)
+        throw new Error(`無法從 API 取得 Telegram Message ID。後端回傳內容: ${JSON.stringify(result)}`)
+      }
+      
+      // 安全轉型為字串
+      const finalMessageId = String(rawMsgId)
 
       uploadStatus.value = `檔案 ${i + 1} Telegram 上傳成功，寫入資料庫...`
 
@@ -370,7 +383,7 @@ const handleUpload = async () => {
         const { error: dbError } = await supabase.from(targetMoviesTable).insert({
           title: fileTitle,
           description: uploadForm.value.description,
-          tg_message_id: tgMessageId.toString()
+          tg_message_id: finalMessageId
         })
         if (dbError) throw dbError
       } else {
@@ -379,7 +392,7 @@ const handleUpload = async () => {
           season: uploadForm.value.season,
           episode: currentEpisodeNumber,
           title: fileTitle,
-          tg_message_id: tgMessageId.toString()
+          tg_message_id: finalMessageId
         })
         if (dbError) throw dbError
         currentEpisodeNumber++ // 成功後集數遞增
@@ -403,7 +416,8 @@ const handleUpload = async () => {
       season: 1,
       episode: 1
     }
-    document.querySelector('input[type="file"]').value = ''
+    const fileInput = document.querySelector('input[type="file"]')
+    if (fileInput) fileInput.value = ''
 
   } catch (error) {
     console.error('Upload Error:', error)
