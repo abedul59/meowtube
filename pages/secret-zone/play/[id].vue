@@ -68,11 +68,17 @@ onMounted(async () => {
     episodeData.value = data
     
     // 組裝影片串流網址：API_URL/stream/{tg_message_id}
-    if (data && data.tg_message_id) {
-      videoUrl.value = `${apiBaseUrl}/stream/${data.tg_message_id}`
-    } else {
-      throw new Error("找不到對應的 Telegram 影片 ID")
-    }
+// 找到這一段：
+// if (data && data.tg_message_id) {
+//   videoUrl.value = `${apiBaseUrl}/stream/${data.tg_message_id}`
+// }
+
+// 💡 改成這樣：
+if (data && data.tg_message_id) {
+  videoUrl.value = `${apiBaseUrl}/stream/${data.tg_message_id}?is_secret=true`
+} else {
+  throw new Error("找不到對應的 Telegram 影片 ID")
+}
 
   } catch (err) {
     console.error('影片載入失敗:', err)
