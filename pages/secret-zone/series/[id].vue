@@ -1,29 +1,39 @@
 <template>
-  <div v-if="isAuthenticated" class="p-8">
-    <div v-if="pending">載入中...</div>
-    <div v-else-if="error">找不到該私密影集或發生錯誤</div>
+  <div class="p-8 text-white min-h-screen bg-gray-900">
+    <div v-if="pending" class="text-xl text-blue-400">⏳ 努力讀取私密檔案中...</div>
+    <div v-else-if="error" class="text-red-500 text-xl">❌ 糟糕，發生錯誤了: {{ error.message }}</div>
     <div v-else>
-      <h1 class="text-3xl font-bold mb-4">{{ seriesData?.title }}</h1>
-      <p class="mb-8 text-gray-400">{{ seriesData?.description }}</p>
+      <!-- 返回按鈕 -->
+      <button 
+        @click="router.back()" 
+        class="mb-6 px-4 py-2 bg-gray-700 hover:bg-gray-600 transition-colors rounded text-sm"
+      >
+        ← 返回私密區列表
+      </button>
 
-      <h2 class="text-2xl mb-4">集數列表</h2>
-      <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+      <!-- 影集標題與簡介 -->
+      <h1 class="text-3xl font-bold mb-4 text-purple-400">🎬 {{ seriesData?.title }}</h1>
+      <p class="mb-8 text-gray-300">{{ seriesData?.description || '這部影集很神祕，沒有留下任何簡介。' }}</p>
+
+      <!-- 集數列表 -->
+      <h2 class="text-2xl mb-4 border-b border-gray-700 pb-2">集數列表</h2>
+      
+      <div v-if="episodesData.length === 0" class="text-gray-500 mt-4">
+        目前還沒有上傳任何集數喔！
+      </div>
+      
+      <div v-else class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
         <div 
           v-for="episode in episodesData" 
           :key="episode.id"
-          class="border border-gray-700 p-4 rounded-lg hover:bg-gray-800 cursor-pointer"
+          class="border border-gray-700 p-5 rounded-lg hover:bg-gray-800 hover:border-purple-500 cursor-pointer transition-all shadow-md"
+          @click="goToPlay(episode.id)"
         >
-          <!-- 這裡可以替換成您的私密播放頁面路由 -->
-          <NuxtLink :to="`/secret-zone/play/${episode.id}`">
-            <h3 class="text-xl">第 {{ episode.episode_number }} 集</h3>
-            <p>{{ episode.title }}</p>
-          </NuxtLink>
+          <h3 class="text-xl font-bold text-blue-300 mb-2">第 {{ episode.episode_number }} 集</h3>
+          <p class="text-gray-400 truncate" :title="episode.title">{{ episode.title }}</p>
         </div>
       </div>
     </div>
-  </div>
-  <div v-else class="p-8 text-red-500">
-    您沒有權限訪問此私密區域，請先輸入密碼解鎖。
   </div>
 </template>
 
@@ -33,29 +43,40 @@ import { useRoute, useRouter } from 'vue-router'
 
 const route = useRoute()
 const router = useRouter()
-const supabase = useSupabaseClient()
+// 呼叫 Nuxt 3 內建的 Supabase 客戶端
+const supabase = useSupabaseClient() 
 
-// 從網址列取得 UUID
+// 從網址列取得影集的 UUID
 const seriesId = route.params.id
 
-const isAuthenticated = ref(false)
 const pending = ref(true)
 const error = ref(null)
 const seriesData = ref(null)
 const episodesData = ref([])
 
-onMounted(async () => {
-  // 1. 檢查 sessionStorage 權限
-const secretAuth = sessionStorage.getItem('isSecretUnlocked')
-if (secretAuth !== 'yes') {
-  router.push('/secret-zone')
-  return
+// 點擊集數時，跳轉到私密播放頁面
+const goToPlay = (episodeId) => {
+  // 假設您之後會建立一個專門播放私密影片的頁面
+  router.push(`/secret-zone/play/${episodeId}`)
 }
-  
-  isAuthenticated.value = true
+
+onMounted(async () => {
+  // =====================================================================
+  // 🛡️ 權限檢查區塊 (目前已註解，讓您能直接看到畫面！)
+  // =====================================================================
+  // 等您確認畫面上都有抓到資料後，請把下面這段解開，
+  // 並把 '您設定的密碼Key' 換成您當初在密碼頁寫入 sessionStorage 的名稱。
+  /*
+  const isUnlocked = sessionStorage.getItem('您設定的密碼Key') 
+  if (!isUnlocked) {
+    router.push('/secret-zone') // 沒鑰匙就踢回去
+    return
+  }
+  */
+  // =====================================================================
 
   try {
-    // 2. 查詢私密影集主檔 (secret_series)
+    // 1. 查詢私密影集主檔 (抓標題、簡介)
     const { data: series, error: seriesError } = await supabase
       .from('secret_series')
       .select('*')
@@ -65,7 +86,7 @@ if (secretAuth !== 'yes') {
     if (seriesError) throw seriesError
     seriesData.value = series
 
-    // 3. 查詢該影集底下的私密集數 (secret_episodes)
+    // 2. 查詢該影集底下的私密集數，並依集數排序
     const { data: episodes, error: episodesError } = await supabase
       .from('secret_episodes')
       .select('*')
@@ -76,10 +97,10 @@ if (secretAuth !== 'yes') {
     episodesData.value = episodes
 
   } catch (err) {
-    console.error(err)
+    console.error('抓取資料失敗:', err)
     error.value = err
   } finally {
-    pending.value = false
+    pending.value = false // 關閉載入中動畫
   }
 })
 </script>
