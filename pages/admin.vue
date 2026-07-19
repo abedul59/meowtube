@@ -238,7 +238,7 @@ const currentSeriesList = computed(() => {
 
 const goToPrivateZone = () => {
   const pwd = prompt('🔒 這是私密區域，請輸入管理員密碼：')
-  if (pwd === 'pornporn') {
+  if (pwd === 'porn') {
     sessionStorage.setItem('secret_auth', 'granted')
     router.push('/secret-zone') 
   } else if (pwd !== null) {
