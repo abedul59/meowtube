@@ -1,18 +1,20 @@
 <template>
   <div class="min-h-screen bg-gray-900 text-white p-4 md:p-8">
     <div class="max-w-5xl mx-auto">
+      <!-- 返回按鈕 -->
       <button @click="$router.back()" class="mb-6 inline-flex items-center text-gray-400 hover:text-white transition font-bold bg-gray-800 px-4 py-2 rounded-lg border border-gray-700 shadow-sm">
         ⬅ 返回上一頁
       </button>
 
+      <!-- 載入中狀態 -->
       <div v-if="loading" class="flex justify-center items-center h-64">
         <div class="w-10 h-10 border-4 border-red-500 border-t-transparent rounded-full animate-spin"></div>
       </div>
 
+      <!-- 影片內容區塊 -->
       <div v-else-if="movie" class="space-y-6 animate-fade-in">
         
         <div class="relative pt-[56.25%] bg-black rounded-xl overflow-hidden shadow-2xl border border-gray-800">
-          <!-- 💡 修正 2：加上 :key="movie.id" 確保資料更新時重置播放器 -->
           <video 
             :key="movie.id"
             ref="videoPlayer"
@@ -24,7 +26,7 @@
             @loadedmetadata="resumeProgress"
             @timeupdate="onTimeUpdate"
           >
-            <!-- 💡 注意：如果您這支電影也是私密群組的，請記得在網址後面加上 ?is_secret=true -->
+            <!-- 確保網址乾淨，預設抓取公開群組影片 -->
             <source :src="`${getActiveApiUrl()}/stream/${movie.tg_message_id}`" type="video/mp4" />
             <track 
               v-for="(sub, index) in movie.subtitles" 
@@ -38,7 +40,7 @@
           </video>
         </div>
 
-        <!-- 💡 觀看紀錄控制面板 -->
+        <!-- 觀看紀錄控制面板 -->
         <div class="flex flex-wrap items-center gap-3 bg-gray-800/50 p-3 rounded-lg border border-gray-700/50">
           <button @click="manualSaveProgress" class="px-4 py-2 bg-red-600 hover:bg-red-700 text-white text-sm font-bold rounded shadow transition">
             💾 記憶觀看時間
@@ -79,7 +81,7 @@ import { useRoute } from 'vue-router'
 
 const route = useRoute()
 const supabase = useSupabaseClient()
-const config = useRuntimeConfig() // 取得環境變數
+const config = useRuntimeConfig() 
 
 const loading = ref(true)
 const movie = ref(null)
@@ -87,7 +89,6 @@ const videoPlayer = ref(null)
 const savedTime = ref(0)
 const actionMessage = ref('')
 
-// 💡 修正 1：補上 getActiveApiUrl 函式
 const getActiveApiUrl = () => {
   return config.public.apiBase || 'https://meowtube-api-10n0.onrender.com'
 }
