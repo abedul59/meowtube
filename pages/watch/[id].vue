@@ -12,7 +12,9 @@
       <div v-else-if="movie" class="space-y-6 animate-fade-in">
         
         <div class="relative pt-[56.25%] bg-black rounded-xl overflow-hidden shadow-2xl border border-gray-800">
+          <!-- 💡 修正 2：加上 :key="movie.id" 確保資料更新時重置播放器 -->
           <video 
+            :key="movie.id"
             ref="videoPlayer"
             controls preload="none"
             autoplay 
@@ -22,6 +24,7 @@
             @loadedmetadata="resumeProgress"
             @timeupdate="onTimeUpdate"
           >
+            <!-- 💡 注意：如果您這支電影也是私密群組的，請記得在網址後面加上 ?is_secret=true -->
             <source :src="`${getActiveApiUrl()}/stream/${movie.tg_message_id}`" type="video/mp4" />
             <track 
               v-for="(sub, index) in movie.subtitles" 
@@ -76,12 +79,18 @@ import { useRoute } from 'vue-router'
 
 const route = useRoute()
 const supabase = useSupabaseClient()
+const config = useRuntimeConfig() // 取得環境變數
 
 const loading = ref(true)
 const movie = ref(null)
 const videoPlayer = ref(null)
 const savedTime = ref(0)
 const actionMessage = ref('')
+
+// 💡 修正 1：補上 getActiveApiUrl 函式
+const getActiveApiUrl = () => {
+  return config.public.apiBase || 'https://meowtube-api-10n0.onrender.com'
+}
 
 const fetchMovieData = async () => {
   try {
