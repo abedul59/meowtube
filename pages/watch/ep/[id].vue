@@ -17,7 +17,9 @@
         <!-- 左側：影片播放器與主資訊 -->
         <div class="xl:col-span-2 space-y-6">
           <div class="relative pt-[56.25%] bg-black rounded-xl overflow-hidden shadow-2xl border border-gray-800">
+            <!-- 💡 修正 2：加上 :key="episode.id" 確保切換集數時能重置播放器 -->
             <video 
+              :key="episode.id"
               ref="videoPlayer"
               controls preload="none"
               autoplay 
@@ -28,7 +30,7 @@
               @timeupdate="onTimeUpdate"
               @ended="playNextEpisode"
             >
-              <source :src="`${getActiveApiUrl()}/stream/${episode.tg_message_id}`" type="video/mp4" />
+              <source :src="`${getActiveApiUrl()}/stream/${episode.tg_message_id}?is_secret=true`" type="video/mp4" />
               <track 
                 v-for="(sub, index) in episode.subtitles" 
                 :key="index"
@@ -109,10 +111,13 @@
 <script setup>
 import { ref, onMounted, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
+// 這裡如果您的專案有用到，確保有引入，或 Nuxt 已自動 import
+// import { useRuntimeConfig } from '#app' 
 
 const route = useRoute()
 const router = useRouter()
 const supabase = useSupabaseClient()
+const config = useRuntimeConfig() // 取得環境變數
 
 const loading = ref(true)
 const episode = ref(null)
@@ -120,6 +125,12 @@ const seriesEpisodes = ref([])
 const videoPlayer = ref(null)
 const savedTime = ref(0)
 const actionMessage = ref('')
+
+// 💡 修正 1：補上 getActiveApiUrl 函式
+const getActiveApiUrl = () => {
+  // 會優先抓取您在 nuxt.config.ts 設定的 public.apiBase，若無則使用您的 Render 網址
+  return config.public.apiBase || 'https://meowtube-api-10n0.onrender.com'
+}
 
 const fetchEpisodeData = async () => {
   try {
@@ -137,8 +148,7 @@ const fetchEpisodeData = async () => {
       if (listData) seriesEpisodes.value = listData
     }
 
-    // 3. 雲端優先讀取進度 (從 playback_progress 表)
-    // 使用 maybeSingle() 避免第一觀看時找不到資料而報錯
+    // 3. 雲端優先讀取進度
     const { data: progressData } = await supabase
       .from('playback_progress')
       .select('current_time')
@@ -162,6 +172,8 @@ const fetchEpisodeData = async () => {
 }
 
 watch(() => route.params.id, () => {
+  // 切換集數時，將儲存的時間歸零，避免載入到上一集的進度
+  savedTime.value = 0 
   fetchEpisodeData()
 })
 
