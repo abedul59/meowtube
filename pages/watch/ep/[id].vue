@@ -19,7 +19,7 @@
           <div class="relative pt-[56.25%] bg-black rounded-xl overflow-hidden shadow-2xl border border-gray-800">
             <video 
               ref="videoPlayer"
-              controls 
+              controls preload="none"
               autoplay 
               crossorigin="anonymous"
               class="absolute top-0 left-0 w-full h-full outline-none" 
