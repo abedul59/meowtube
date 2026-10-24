@@ -28,7 +28,9 @@
               controlsList="nodownload"
               @loadedmetadata="resumeProgress" 
               @timeupdate="onTimeUpdate"
-              @ended="playNextEpisode"
+              @pause="onPause"
+              @play="onPlay"
+              @ended="handleEnded"
             >
               <!-- 💡 這裡已經修正：移除了寫死的 ?is_secret=true -->
               <source :src="`${getActiveApiUrl()}/stream/${episode.tg_message_id}`" type="video/mp4" />
@@ -122,12 +124,28 @@ const loading = ref(true)
 const episode = ref(null)
 const seriesEpisodes = ref([])
 const videoPlayer = ref(null)
-const savedTime = ref(0)
 const actionMessage = ref('')
 
 const getActiveApiUrl = () => {
   return config.public.apiBase || 'https://meowtube-api-10n0.onrender.com'
 }
+
+const showMessage = (msg) => {
+  actionMessage.value = msg
+  setTimeout(() => { actionMessage.value = '' }, 3000)
+}
+
+const {
+  savedTime,
+  loadProgress,
+  resumeProgress,
+  onTimeUpdate,
+  onPause,
+  onPlay,
+  onEnded,
+  saveProgress,
+  clearProgress: clearStoredProgress
+} = usePlaybackProgress({ supabase, videoPlayer, onMessage: showMessage })
 
 const fetchEpisodeData = async () => {
   try {
@@ -145,20 +163,7 @@ const fetchEpisodeData = async () => {
       if (listData) seriesEpisodes.value = listData
     }
 
-    // 3. 雲端優先讀取進度
-    const { data: progressData } = await supabase
-      .from('playback_progress')
-      .select('current_time')
-      .eq('video_id', epId)
-      .maybeSingle()
-
-    if (progressData && progressData.current_time > 0) {
-      savedTime.value = progressData.current_time
-    } else {
-      const progressKey = `progress_ep_${epId}`
-      const localProgress = localStorage.getItem(progressKey)
-      if (localProgress) savedTime.value = parseFloat(localProgress)
-    }
+    await loadProgress(epId, `progress_ep_${epId}`)
 
   } catch (err) {
     console.error('載入失敗:', err.message)
@@ -168,7 +173,8 @@ const fetchEpisodeData = async () => {
   }
 }
 
-watch(() => route.params.id, () => {
+watch(() => route.params.id, async () => {
+  await saveProgress({ force: true })
   savedTime.value = 0 
   fetchEpisodeData()
 })
@@ -181,71 +187,12 @@ onMounted(() => {
 // 進度控制邏輯
 // ==========================================
 
-const showMessage = (msg) => {
-  actionMessage.value = msg
-  setTimeout(() => { actionMessage.value = '' }, 3000)
-}
-
 const manualSaveProgress = async () => {
-  if (videoPlayer.value && episode.value) {
-    const currentTime = videoPlayer.value.currentTime
-    
-    // 寫入本機
-    const progressKey = `progress_ep_${episode.value.id}`
-    localStorage.setItem(progressKey, currentTime)
-    savedTime.value = currentTime
-
-    // 寫入雲端 (Upsert)
-    const { error } = await supabase
-      .from('playback_progress')
-      .upsert({ 
-        video_id: episode.value.id, 
-        current_time: currentTime,
-        updated_at: new Date().toISOString()
-      }, { onConflict: 'video_id' })
-
-    if (error) {
-      console.error(error)
-      showMessage('❌ 雲端同步失敗，僅存於本機')
-    } else {
-      showMessage('☁️ ✅ 觀看進度已手動儲存至雲端！')
-    }
-  }
+  await saveProgress({ force: true, notify: true })
 }
 
 const clearProgress = async () => {
-  if (episode.value) {
-    // 清除本機
-    const progressKey = `progress_ep_${episode.value.id}`
-    localStorage.removeItem(progressKey)
-    savedTime.value = 0
-
-    // 清除雲端
-    const { error } = await supabase
-      .from('playback_progress')
-      .delete()
-      .eq('video_id', episode.value.id)
-
-    if (error) {
-      console.error(error)
-      showMessage('❌ 雲端清除失敗')
-    } else {
-      showMessage('🗑️ 雲端與本機的觀看紀錄已成功清除！')
-    }
-  }
-}
-
-const resumeProgress = () => {
-  if (videoPlayer.value && savedTime.value > 0) {
-    videoPlayer.value.currentTime = savedTime.value
-  }
-}
-
-const onTimeUpdate = () => {
-  if (videoPlayer.value && episode.value && Math.floor(videoPlayer.value.currentTime) % 5 === 0) {
-    const progressKey = `progress_ep_${episode.value.id}`
-    localStorage.setItem(progressKey, videoPlayer.value.currentTime)
-  }
+  await clearStoredProgress()
 }
 
 const goToEpisode = (targetId) => {
@@ -259,6 +206,11 @@ const playNextEpisode = () => {
     const nextEp = seriesEpisodes.value[currentIndex + 1]
     goToEpisode(nextEp.id)
   }
+}
+
+const handleEnded = async () => {
+  await onEnded()
+  playNextEpisode()
 }
 </script>
 

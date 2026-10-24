@@ -25,6 +25,9 @@
             controlsList="nodownload"
             @loadedmetadata="resumeProgress"
             @timeupdate="onTimeUpdate"
+            @pause="onPause"
+            @play="onPlay"
+            @ended="onEnded"
           >
             <!-- 確保網址乾淨，預設抓取公開群組影片 -->
             <source :src="`${getActiveApiUrl()}/stream/${movie.tg_message_id}`" type="video/mp4" />
@@ -86,12 +89,28 @@ const config = useRuntimeConfig()
 const loading = ref(true)
 const movie = ref(null)
 const videoPlayer = ref(null)
-const savedTime = ref(0)
 const actionMessage = ref('')
 
 const getActiveApiUrl = () => {
   return config.public.apiBase || 'https://meowtube-api-10n0.onrender.com'
 }
+
+const showMessage = (msg) => {
+  actionMessage.value = msg
+  setTimeout(() => { actionMessage.value = '' }, 3000)
+}
+
+const {
+  savedTime,
+  loadProgress,
+  resumeProgress,
+  onTimeUpdate,
+  onPause,
+  onPlay,
+  onEnded,
+  saveProgress,
+  clearProgress: clearStoredProgress
+} = usePlaybackProgress({ supabase, videoPlayer, onMessage: showMessage })
 
 const fetchMovieData = async () => {
   try {
@@ -103,20 +122,7 @@ const fetchMovieData = async () => {
     if (error) throw error
     movie.value = data
 
-    // 2. 雲端優先讀取進度
-    const { data: progressData } = await supabase
-      .from('playback_progress')
-      .select('current_time')
-      .eq('video_id', movieId)
-      .maybeSingle()
-
-    if (progressData && progressData.current_time > 0) {
-      savedTime.value = progressData.current_time
-    } else {
-      const progressKey = `progress_movie_${movieId}`
-      const localProgress = localStorage.getItem(progressKey)
-      if (localProgress) savedTime.value = parseFloat(localProgress)
-    }
+    await loadProgress(movieId, `progress_movie_${movieId}`)
 
   } catch (err) {
     console.error('載入失敗:', err.message)
@@ -134,71 +140,12 @@ onMounted(() => {
 // 進度控制邏輯
 // ==========================================
 
-const showMessage = (msg) => {
-  actionMessage.value = msg
-  setTimeout(() => { actionMessage.value = '' }, 3000)
-}
-
 const manualSaveProgress = async () => {
-  if (videoPlayer.value && movie.value) {
-    const currentTime = videoPlayer.value.currentTime
-    
-    // 寫入本機
-    const progressKey = `progress_movie_${movie.value.id}`
-    localStorage.setItem(progressKey, currentTime)
-    savedTime.value = currentTime
-
-    // 寫入雲端 (Upsert)
-    const { error } = await supabase
-      .from('playback_progress')
-      .upsert({ 
-        video_id: movie.value.id, 
-        current_time: currentTime,
-        updated_at: new Date().toISOString()
-      }, { onConflict: 'video_id' })
-
-    if (error) {
-      console.error(error)
-      showMessage('❌ 雲端同步失敗，僅存於本機')
-    } else {
-      showMessage('☁️ ✅ 觀看進度已手動儲存至雲端！')
-    }
-  }
+  await saveProgress({ force: true, notify: true })
 }
 
 const clearProgress = async () => {
-  if (movie.value) {
-    // 清除本機
-    const progressKey = `progress_movie_${movie.value.id}`
-    localStorage.removeItem(progressKey)
-    savedTime.value = 0
-
-    // 清除雲端
-    const { error } = await supabase
-      .from('playback_progress')
-      .delete()
-      .eq('video_id', movie.value.id)
-
-    if (error) {
-      console.error(error)
-      showMessage('❌ 雲端清除失敗')
-    } else {
-      showMessage('🗑️ 雲端與本機的觀看紀錄已成功清除！')
-    }
-  }
-}
-
-const resumeProgress = () => {
-  if (videoPlayer.value && savedTime.value > 0) {
-    videoPlayer.value.currentTime = savedTime.value
-  }
-}
-
-const onTimeUpdate = () => {
-  if (videoPlayer.value && movie.value && Math.floor(videoPlayer.value.currentTime) % 5 === 0) {
-    const progressKey = `progress_movie_${movie.value.id}`
-    localStorage.setItem(progressKey, videoPlayer.value.currentTime)
-  }
+  await clearStoredProgress()
 }
 </script>
 
