@@ -38,6 +38,9 @@
           controlsList="nodownload"
           @loadedmetadata="resumeProgress"
           @timeupdate="onTimeUpdate"
+          @pause="onPause"
+          @play="onPlay"
+          @ended="onEnded"
         >
           <!-- 💡 這裡使用的是您原本就寫對的帶有 ?is_secret=true 的網址 -->
           <source :src="videoUrl" type="video/mp4" />
@@ -78,13 +81,29 @@ const error = ref(null)
 const episodeData = ref(null)
 const videoUrl = ref('')
 const videoPlayer = ref(null)
-const savedTime = ref(0)
 const actionMessage = ref('')
 
 // 💡 修正 2：改用動態取得 API 網址，與公開頁面標準統一
 const getActiveApiUrl = () => {
   return config.public.apiBase || 'https://meowtube-api-10n0.onrender.com'
 }
+
+const showMessage = (msg) => {
+  actionMessage.value = msg
+  setTimeout(() => { actionMessage.value = '' }, 3000)
+}
+
+const {
+  savedTime,
+  loadProgress,
+  resumeProgress,
+  onTimeUpdate,
+  onPause,
+  onPlay,
+  onEnded,
+  saveProgress,
+  clearProgress: clearStoredProgress
+} = usePlaybackProgress({ supabase, videoPlayer, onMessage: showMessage })
 
 onMounted(async () => {
   try {
@@ -107,20 +126,7 @@ onMounted(async () => {
       throw new Error("找不到對應的 Telegram 影片 ID")
     }
 
-    // 3. 雲端優先讀取觀看進度
-    const { data: progressData } = await supabase
-      .from('playback_progress')
-      .select('current_time')
-      .eq('video_id', episodeId)
-      .maybeSingle()
-
-    if (progressData && progressData.current_time > 0) {
-      savedTime.value = progressData.current_time
-    } else {
-      const progressKey = `progress_secret_ep_${episodeId}`
-      const localProgress = localStorage.getItem(progressKey)
-      if (localProgress) savedTime.value = parseFloat(localProgress)
-    }
+    await loadProgress(episodeId, `progress_secret_ep_${episodeId}`)
 
   } catch (err) {
     console.error('影片載入失敗:', err)
@@ -134,71 +140,12 @@ onMounted(async () => {
 // 進度控制邏輯
 // ==========================================
 
-const showMessage = (msg) => {
-  actionMessage.value = msg
-  setTimeout(() => { actionMessage.value = '' }, 3000)
-}
-
 const manualSaveProgress = async () => {
-  if (videoPlayer.value && episodeData.value) {
-    const currentTime = videoPlayer.value.currentTime
-    
-    // 寫入本機
-    const progressKey = `progress_secret_ep_${episodeData.value.id}`
-    localStorage.setItem(progressKey, currentTime)
-    savedTime.value = currentTime
-
-    // 寫入雲端 (Upsert)
-    const { error: upsertError } = await supabase
-      .from('playback_progress')
-      .upsert({ 
-        video_id: episodeData.value.id, 
-        current_time: currentTime,
-        updated_at: new Date().toISOString()
-      }, { onConflict: 'video_id' })
-
-    if (upsertError) {
-      console.error(upsertError)
-      showMessage('❌ 雲端同步失敗，僅存於本機')
-    } else {
-      showMessage('☁️ ✅ 觀看進度已手動儲存至雲端！')
-    }
-  }
+  await saveProgress({ force: true, notify: true })
 }
 
 const clearProgress = async () => {
-  if (episodeData.value) {
-    // 清除本機
-    const progressKey = `progress_secret_ep_${episodeData.value.id}`
-    localStorage.removeItem(progressKey)
-    savedTime.value = 0
-
-    // 清除雲端
-    const { error: deleteError } = await supabase
-      .from('playback_progress')
-      .delete()
-      .eq('video_id', episodeData.value.id)
-
-    if (deleteError) {
-      console.error(deleteError)
-      showMessage('❌ 雲端清除失敗')
-    } else {
-      showMessage('🗑️ 雲端與本機的觀看紀錄已成功清除！')
-    }
-  }
-}
-
-const resumeProgress = () => {
-  if (videoPlayer.value && savedTime.value > 0) {
-    videoPlayer.value.currentTime = savedTime.value
-  }
-}
-
-const onTimeUpdate = () => {
-  if (videoPlayer.value && episodeData.value && Math.floor(videoPlayer.value.currentTime) % 5 === 0) {
-    const progressKey = `progress_secret_ep_${episodeData.value.id}`
-    localStorage.setItem(progressKey, videoPlayer.value.currentTime)
-  }
+  await clearStoredProgress()
 }
 </script>
 
