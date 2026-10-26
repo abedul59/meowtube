@@ -1,18 +1,17 @@
-export const getActiveApiUrl = () => {
-  // 取得今天的日期 (1 ~ 31)
-  const today = new Date().getDate();
+export const VIDEO_API_URLS = [
+  'https://meowtube-api-lawxstudent168.onrender.com',
+  'https://meowtube-api-f0oz.onrender.com',
+  'https://meowtube-api-10n0.onrender.com'
+]
 
-  // 1號 ~ 10號使用第一個 API
-  if (today <= 10) {
-    return 'https://meowtube-api-lawxstudent168.onrender.com';
-  } 
+export const getApiUrlsByPriority = (date = new Date()) => {
+  const day = date.getDate()
+  const primaryIndex = day <= 10 ? 0 : day <= 20 ? 1 : 2
 
-  else if (today <= 20) {
-    return 'https://meowtube-api-f0oz.onrender.com';
-  } 
-    https://meowtube-api-f0oz.onrender.com
-  // 16號 ~ 月底使用第二個 API
-  else {
-    return 'https://meowtube-api-10n0.onrender.com';
-  }
-};
+  return [
+    ...VIDEO_API_URLS.slice(primaryIndex),
+    ...VIDEO_API_URLS.slice(0, primaryIndex)
+  ]
+}
+
+export const getActiveApiUrl = (date = new Date()) => getApiUrlsByPriority(date)[0]

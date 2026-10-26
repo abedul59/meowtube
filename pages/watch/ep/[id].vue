@@ -26,14 +26,15 @@
               crossorigin="anonymous"
               class="absolute top-0 left-0 w-full h-full outline-none" 
               controlsList="nodownload"
-              @loadedmetadata="resumeProgress" 
+              @loadedmetadata="handleLoadedMetadata"
+              @error="handleVideoError"
               @timeupdate="onTimeUpdate"
               @pause="onPause"
               @play="onPlay"
               @ended="handleEnded"
             >
               <!-- 💡 這裡已經修正：移除了寫死的 ?is_secret=true -->
-              <source :src="`${getActiveApiUrl()}/stream/${episode.tg_message_id}`" type="video/mp4" />
+              <source :src="`${apiBaseUrl}/stream/${episode.tg_message_id}`" type="video/mp4" />
               <track 
                 v-for="(sub, index) in episode.subtitles" 
                 :key="index"
@@ -118,17 +119,11 @@ import { useRoute, useRouter } from 'vue-router'
 const route = useRoute()
 const router = useRouter()
 const supabase = useSupabaseClient()
-const config = useRuntimeConfig()
-
 const loading = ref(true)
 const episode = ref(null)
 const seriesEpisodes = ref([])
 const videoPlayer = ref(null)
 const actionMessage = ref('')
-
-const getActiveApiUrl = () => {
-  return config.public.apiBase || 'https://meowtube-api-10n0.onrender.com'
-}
 
 const showMessage = (msg) => {
   actionMessage.value = msg
@@ -147,9 +142,17 @@ const {
   clearProgress: clearStoredProgress
 } = usePlaybackProgress({ supabase, videoPlayer, onMessage: showMessage })
 
+const {
+  apiBaseUrl,
+  resetApiFailover,
+  handleLoadedMetadata,
+  handleVideoError
+} = useVideoApiFailover({ videoPlayer, resumeProgress, onMessage: showMessage })
+
 const fetchEpisodeData = async () => {
   try {
     loading.value = true
+    resetApiFailover()
     const epId = route.params.id
 
     // 1. 取得影片與影集資訊

@@ -28,7 +28,7 @@
       <div class="aspect-video bg-gray-900 rounded-xl overflow-hidden shadow-2xl border border-gray-800 mb-6">
         <!-- 💡 修正 1：補上 preload="none" 與 :key 綁定，防止幽靈連線與重置問題 -->
         <video 
-          v-if="videoUrl"
+          v-if="episodeData?.tg_message_id"
           :key="episodeData.id"
           ref="videoPlayer"
           controls preload="none"
@@ -36,14 +36,15 @@
           crossorigin="anonymous"
           class="w-full h-full outline-none"
           controlsList="nodownload"
-          @loadedmetadata="resumeProgress"
+          @loadedmetadata="handleLoadedMetadata"
+          @error="handleVideoError"
           @timeupdate="onTimeUpdate"
           @pause="onPause"
           @play="onPlay"
           @ended="onEnded"
         >
           <!-- 💡 這裡使用的是您原本就寫對的帶有 ?is_secret=true 的網址 -->
-          <source :src="videoUrl" type="video/mp4" />
+          <source :src="`${apiBaseUrl}/stream/${episodeData.tg_message_id}?is_secret=true`" type="video/mp4" />
           您的瀏覽器不支援 HTML5 影片播放。
         </video>
       </div>
@@ -72,21 +73,13 @@ import { useRoute, useRouter } from 'vue-router'
 const route = useRoute()
 const router = useRouter()
 const supabase = useSupabaseClient()
-const config = useRuntimeConfig()
-
 const episodeId = route.params.id
 
 const pending = ref(true)
 const error = ref(null)
 const episodeData = ref(null)
-const videoUrl = ref('')
 const videoPlayer = ref(null)
 const actionMessage = ref('')
-
-// 💡 修正 2：改用動態取得 API 網址，與公開頁面標準統一
-const getActiveApiUrl = () => {
-  return config.public.apiBase || 'https://meowtube-api-10n0.onrender.com'
-}
 
 const showMessage = (msg) => {
   actionMessage.value = msg
@@ -105,6 +98,12 @@ const {
   clearProgress: clearStoredProgress
 } = usePlaybackProgress({ supabase, videoPlayer, onMessage: showMessage })
 
+const {
+  apiBaseUrl,
+  handleLoadedMetadata,
+  handleVideoError
+} = useVideoApiFailover({ videoPlayer, resumeProgress, onMessage: showMessage })
+
 onMounted(async () => {
   try {
     pending.value = true
@@ -119,10 +118,8 @@ onMounted(async () => {
     if (fetchError) throw fetchError
     episodeData.value = data
     
-    // 2. 組裝影片網址，確保帶有 is_secret 參數
-    if (data && data.tg_message_id) {
-      videoUrl.value = `${getActiveApiUrl()}/stream/${data.tg_message_id}?is_secret=true`
-    } else {
+    // 2. 確認有可供三個 API 線路使用的 Telegram 影片 ID
+    if (!data?.tg_message_id) {
       throw new Error("找不到對應的 Telegram 影片 ID")
     }
 
