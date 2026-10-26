@@ -1,7 +1,8 @@
 export const VIDEO_API_URLS = [
   'https://meowtube-api-lawxstudent168.onrender.com',
   'https://meowtube-api-f0oz.onrender.com',
-  'https://meowtube-api-10n0.onrender.com'
+  'https://meowtube-api-10n0.onrender.com',
+  'https://meowtube-api.onrender.com'
 ]
 
 export const getApiUrlsByPriority = (date = new Date()) => {
