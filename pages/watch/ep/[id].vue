@@ -20,6 +20,7 @@
             <!-- 確保切換集數時能重置播放器 -->
             <video 
               :key="episode.id"
+              :src="`${apiBaseUrl}/stream/${episode.tg_message_id}`"
               ref="videoPlayer"
               controls preload="none"
               autoplay 
@@ -33,8 +34,6 @@
               @play="onPlay"
               @ended="handleEnded"
             >
-              <!-- 💡 這裡已經修正：移除了寫死的 ?is_secret=true -->
-              <source :src="`${apiBaseUrl}/stream/${episode.tg_message_id}`" type="video/mp4" />
               <track 
                 v-for="(sub, index) in episode.subtitles" 
                 :key="index"
