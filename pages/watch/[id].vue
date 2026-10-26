@@ -17,6 +17,7 @@
         <div class="relative pt-[56.25%] bg-black rounded-xl overflow-hidden shadow-2xl border border-gray-800">
           <video 
             :key="movie.id"
+            :src="`${apiBaseUrl}/stream/${movie.tg_message_id}`"
             ref="videoPlayer"
             controls preload="none"
             autoplay 
@@ -30,8 +31,6 @@
             @play="onPlay"
             @ended="onEnded"
           >
-            <!-- 確保網址乾淨，預設抓取公開群組影片 -->
-            <source :src="`${apiBaseUrl}/stream/${movie.tg_message_id}`" type="video/mp4" />
             <track 
               v-for="(sub, index) in movie.subtitles" 
               :key="index"

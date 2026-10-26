@@ -30,6 +30,7 @@
         <video 
           v-if="episodeData?.tg_message_id"
           :key="episodeData.id"
+          :src="`${apiBaseUrl}/stream/${episodeData.tg_message_id}?is_secret=true`"
           ref="videoPlayer"
           controls preload="none"
           autoplay
@@ -43,8 +44,6 @@
           @play="onPlay"
           @ended="onEnded"
         >
-          <!-- 💡 這裡使用的是您原本就寫對的帶有 ?is_secret=true 的網址 -->
-          <source :src="`${apiBaseUrl}/stream/${episodeData.tg_message_id}?is_secret=true`" type="video/mp4" />
           您的瀏覽器不支援 HTML5 影片播放。
         </video>
       </div>
