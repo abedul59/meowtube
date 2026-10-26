@@ -23,14 +23,15 @@
             crossorigin="anonymous"
             class="absolute top-0 left-0 w-full h-full outline-none" 
             controlsList="nodownload"
-            @loadedmetadata="resumeProgress"
+            @loadedmetadata="handleLoadedMetadata"
+            @error="handleVideoError"
             @timeupdate="onTimeUpdate"
             @pause="onPause"
             @play="onPlay"
             @ended="onEnded"
           >
             <!-- 確保網址乾淨，預設抓取公開群組影片 -->
-            <source :src="`${getActiveApiUrl()}/stream/${movie.tg_message_id}`" type="video/mp4" />
+            <source :src="`${apiBaseUrl}/stream/${movie.tg_message_id}`" type="video/mp4" />
             <track 
               v-for="(sub, index) in movie.subtitles" 
               :key="index"
@@ -84,16 +85,10 @@ import { useRoute } from 'vue-router'
 
 const route = useRoute()
 const supabase = useSupabaseClient()
-const config = useRuntimeConfig() 
-
 const loading = ref(true)
 const movie = ref(null)
 const videoPlayer = ref(null)
 const actionMessage = ref('')
-
-const getActiveApiUrl = () => {
-  return config.public.apiBase || 'https://meowtube-api-10n0.onrender.com'
-}
 
 const showMessage = (msg) => {
   actionMessage.value = msg
@@ -111,6 +106,12 @@ const {
   saveProgress,
   clearProgress: clearStoredProgress
 } = usePlaybackProgress({ supabase, videoPlayer, onMessage: showMessage })
+
+const {
+  apiBaseUrl,
+  handleLoadedMetadata,
+  handleVideoError
+} = useVideoApiFailover({ videoPlayer, resumeProgress, onMessage: showMessage })
 
 const fetchMovieData = async () => {
   try {
